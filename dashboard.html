@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Dashboard – PIHSS Attendance</title>
+<link rel="stylesheet" href="css/style.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+  .dash-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  @media(max-width:760px){ .dash-grid{ grid-template-columns:1fr; } }
+  .full-col   { grid-column: 1/-1; }
+  .absent-row { background:#fff5f5!important; }
+  .absent-row td { color:var(--danger)!important; }
+  .section-heading {
+    font-size:1.1rem; font-weight:800; color:var(--green-dark);
+    margin:28px 0 14px;
+    display:flex; align-items:center; gap:8px;
+    border-left:4px solid var(--green);
+    padding-left:12px;
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="site-header">
+  <div class="header-inner">
+    <div class="header-logo">پ</div>
+    <div class="header-text">
+      <h1>Pakistan Islamia Higher Secondary School</h1>
+      <p>Sharjah, UAE — Attendance Dashboard</p>
+    </div>
+    <nav class="header-nav">
+      <a href="index.html"     class="nav-btn">📝 Submit Attendance</a>
+      <a href="dashboard.html" class="nav-btn active">📊 Dashboard</a>
+    </nav>
+  </div>
+</header>
+
+<div id="toast-container"></div>
+<div class="spinner-overlay" id="spinner" style="display:none">
+  <div class="spinner"></div>
+  <div class="spinner-text">Loading data…</div>
+</div>
+
+<!-- MAIN -->
+<main class="page-wrap" style="max-width:1200px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:6px;">
+    <div>
+      <div class="page-title">📊 Attendance Dashboard</div>
+      <p class="page-sub" style="margin-bottom:0">Pakistan Islamia Higher Secondary School Sharjah</p>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-outline btn-sm" onclick="loadAll()">🔄 Refresh</button>
+      <button class="btn btn-gold btn-sm"    onclick="downloadFullPDF()">⬇️ Download PDF Report</button>
+    </div>
+  </div>
+
+  <!-- ── TAB BAR ─────────────────────────────────────────── -->
+  <div class="tab-bar" style="margin-top:20px;">
+    <button class="tab-btn active" onclick="switchTab('daily')">📅 Daily</button>
+    <button class="tab-btn"        onclick="switchTab('weekly')">📆 Weekly</button>
+    <button class="tab-btn"        onclick="switchTab('monthly')">🗓️ Monthly</button>
+    <button class="tab-btn"        onclick="switchTab('student')">👤 Student Records</button>
+    <button class="tab-btn"        onclick="switchTab('absent')">🚨 Absent Register</button>
+    <button class="tab-btn"        onclick="switchTab('records')">📁 All Records</button>
+  </div>
+
+  <!-- ═══════ DAILY TAB ═══════ -->
+  <div class="tab-panel active" id="tab-daily">
+    <div class="filter-row">
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" id="f-date"/>
+      </div>
+      <div class="form-group">
+        <label>Cycle</label>
+        <select id="f-cycle-daily">
+          <option value="">All Cycles</option>
+          <option>Kindergarten</option><option>Primary</option>
+          <option>Middle</option><option>Higher</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Grade</label>
+        <select id="f-grade-daily">
+          <option value="">All Grades</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="renderDaily()">🔍 Filter</button>
+    </div>
+
+    <!-- School-wide summary -->
+    <div class="stats-row" id="daily-stats"></div>
+
+    <div class="dash-grid">
+      <div class="card full-col">
+        <div class="card-title"><span class="icon">📈</span> Daily Trend – Present / Absent / Authorized</div>
+        <div class="chart-container"><canvas id="chart-daily-trend"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="icon">🔵</span> Cycle-wise Attendance</div>
+        <div class="chart-container"><canvas id="chart-cycle"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="icon">🟠</span> Grade-wise Attendance %</div>
+        <div class="chart-container"><canvas id="chart-grade"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section-heading">🏫 Class &amp; Section Wise Report</div>
+    <div class="card">
+      <div class="table-wrap">
+        <table id="tbl-daily">
+          <thead><tr>
+            <th>Class</th><th>Grade</th><th>Section</th><th>Cycle</th>
+            <th>Total</th><th>Present</th><th>Auth Absent</th><th>Unauth Absent</th>
+            <th>Attendance %</th><th>Class Teacher</th>
+          </tr></thead>
+          <tbody id="tbody-daily"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ WEEKLY TAB ═══════ -->
+  <div class="tab-panel" id="tab-weekly">
+    <div class="filter-row">
+      <div class="form-group">
+        <label>Week Start (Monday)</label>
+        <input type="date" id="f-week-start"/>
+      </div>
+      <div class="form-group">
+        <label>Cycle</label>
+        <select id="f-cycle-weekly">
+          <option value="">All Cycles</option>
+          <option>Kindergarten</option><option>Primary</option>
+          <option>Middle</option><option>Higher</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="renderWeekly()">🔍 Filter</button>
+    </div>
+    <div class="stats-row" id="weekly-stats"></div>
+    <div class="dash-grid">
+      <div class="card full-col">
+        <div class="card-title"><span class="icon">📈</span> Weekly Day-by-Day Trend</div>
+        <div class="chart-container"><canvas id="chart-weekly-trend"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="icon">📊</span> Grade-wise Weekly Average %</div>
+        <div class="chart-container"><canvas id="chart-weekly-grade"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="icon">🔵</span> Cycle-wise Weekly Summary</div>
+        <div class="chart-container"><canvas id="chart-weekly-cycle"></canvas></div>
+      </div>
+    </div>
+    <div class="section-heading">📋 Weekly Class Summary</div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Class</th><th>Grade</th><th>Section</th><th>Cycle</th>
+            <th>Days Submitted</th><th>Avg Present</th><th>Avg Absent</th><th>Avg Attendance %</th>
+          </tr></thead>
+          <tbody id="tbody-weekly"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ MONTHLY TAB ═══════ -->
+  <div class="tab-panel" id="tab-monthly">
+    <div class="filter-row">
+      <div class="form-group">
+        <label>Month</label>
+        <input type="month" id="f-month"/>
+      </div>
+      <div class="form-group">
+        <label>Cycle</label>
+        <select id="f-cycle-monthly">
+          <option value="">All Cycles</option>
+          <option>Kindergarten</option><option>Primary</option>
+          <option>Middle</option><option>Higher</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="renderMonthly()">🔍 Filter</button>
+    </div>
+    <div class="stats-row" id="monthly-stats"></div>
+    <div class="dash-grid">
+      <div class="card full-col">
+        <div class="card-title"><span class="icon">📈</span> Monthly Trend (Day-wise)</div>
+        <div class="chart-container tall"><canvas id="chart-monthly-trend"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="icon">🔵</span> Cycle-wise Monthly Average</div>
+        <div class="chart-container"><canvas id="chart-monthly-cycle"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="icon">📊</span> Grade-wise Monthly Average %</div>
+        <div class="chart-container"><canvas id="chart-monthly-grade"></canvas></div>
+      </div>
+    </div>
+    <div class="section-heading">📋 Monthly Class Report</div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Class</th><th>Grade</th><th>Section</th><th>Cycle</th>
+            <th>Days</th><th>Avg Present</th><th>Total Authorized Absent</th>
+            <th>Total Unauth Absent</th><th>Avg Attendance %</th>
+          </tr></thead>
+          <tbody id="tbody-monthly"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ STUDENT RECORDS TAB ═══════ -->
+  <div class="tab-panel" id="tab-student">
+    <div class="card">
+      <div class="card-title"><span class="icon">🔍</span> Search Student Record</div>
+      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:14px;">
+        Enter a student's name to view their complete absence history across all recorded dates.
+      </p>
+      <div class="filter-row">
+        <div class="form-group" style="flex:2">
+          <label>Student Name</label>
+          <input type="text" id="student-search" placeholder="e.g. Fatima Ali" oninput="searchStudent()"/>
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <select id="student-type" onchange="searchStudent()">
+            <option value="">All</option>
+            <option value="authorized">Authorized Absent</option>
+            <option value="unauthorized">Unauthorized Absent</option>
+          </select>
+        </div>
+      </div>
+      <div id="student-results"></div>
+      <div class="chart-container" id="student-chart-wrap" style="display:none;margin-top:16px;">
+        <canvas id="chart-student"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ ABSENT REGISTER TAB ═══════ -->
+  <div class="tab-panel" id="tab-absent">
+    <div class="filter-row">
+      <div class="form-group">
+        <label>From Date</label>
+        <input type="date" id="f-absent-from"/>
+      </div>
+      <div class="form-group">
+        <label>To Date</label>
+        <input type="date" id="f-absent-to"/>
+      </div>
+      <div class="form-group">
+        <label>Type</label>
+        <select id="f-absent-type">
+          <option value="">All</option>
+          <option value="authorized">Authorized</option>
+          <option value="unauthorized">Unauthorized</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Grade</label>
+        <select id="f-absent-grade"><option value="">All Grades</option></select>
+      </div>
+      <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="renderAbsent()">🔍 Filter</button>
+    </div>
+    <div class="stats-row" id="absent-stats"></div>
+    <div class="card">
+      <div class="card-title"><span class="icon">🚨</span> Absent Student Register</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Date</th><th>Class</th><th>Grade</th><th>Cycle</th>
+            <th>Student Name</th><th>Type</th><th>Class Teacher</th>
+          </tr></thead>
+          <tbody id="tbody-absent"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ ALL RECORDS TAB ═══════ -->
+  <div class="tab-panel" id="tab-records">
+    <div class="filter-row">
+      <div class="form-group">
+        <label>From</label>
+        <input type="date" id="f-rec-from"/>
+      </div>
+      <div class="form-group">
+        <label>To</label>
+        <input type="date" id="f-rec-to"/>
+      </div>
+      <div class="form-group">
+        <label>Cycle</label>
+        <select id="f-rec-cycle">
+          <option value="">All</option>
+          <option>Kindergarten</option><option>Primary</option>
+          <option>Middle</option><option>Higher</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Grade</label>
+        <select id="f-rec-grade"><option value="">All Grades</option></select>
+      </div>
+      <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="renderRecords()">🔍 Filter</button>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="icon">📁</span> All Attendance Records</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Date</th><th>Day</th><th>Class</th><th>Cycle</th>
+            <th>Total</th><th>Present</th><th>Auth</th><th>Unauth</th>
+            <th>%</th><th>Teacher</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="tbody-records"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script type="module">
+// ── Firebase ──────────────────────────────────────────────────────────────
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+import {
+  getFirestore, collection, getDocs, deleteDoc, doc, orderBy, query
+} from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
+
+// ▶▶ REPLACE WITH YOUR FIREBASE CONFIG ◀◀
+const firebaseConfig = {
+    apiKey: "AIzaSyD3EputWhUMKuXTgYSXy5RUyPdL9xxgBl4",
+    authDomain: "pihss-attendance.firebaseapp.com",
+    projectId: "pihss-attendance",
+    storageBucket: "pihss-attendance.firebasestorage.app",
+    messagingSenderId: "1048675189447",
+    appId: "1:1048675189447:web:42ab613d641bbfa297f4e2"
+  };
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+
+// ── Global data store ─────────────────────────────────────────────────────
+let ALL_RECORDS = [];
+const CHARTS = {};
+
+// ── Chart colour palette ──────────────────────────────────────────────────
+const PALETTE = {
+  green:  ['rgba(10,124,78,0.8)','rgba(10,124,78,0.2)'],
+  gold:   ['rgba(201,153,58,0.8)','rgba(201,153,58,0.2)'],
+  red:    ['rgba(192,57,43,0.8)','rgba(192,57,43,0.2)'],
+  blue:   ['rgba(41,128,185,0.8)','rgba(41,128,185,0.2)'],
+};
+const MULTI = [
+  '#0a7c4e','#c9993a','#c0392b','#2980b9','#8e44ad','#16a085','#e67e22','#2c3e50'
+];
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+const toast = (msg, type='success') => {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`; t.textContent = msg; c.appendChild(t);
+  setTimeout(()=>t.remove(), 3500);
+};
+const spin  = show => document.getElementById('spinner').style.display = show ? 'flex' : 'none';
+const fmt   = n    => (n||0).toLocaleString();
+const pct   = (a,b)=> b>0 ? Math.round((a/b)*100) : 0;
+const badge = (val,type)=> `<span class="badge badge-${type}">${val}</span>`;
+
+function destroyChart(id) {
+  if (CHARTS[id]) { CHARTS[id].destroy(); delete CHARTS[id]; }
+}
+function makeChart(id, config) {
+  destroyChart(id);
+  CHARTS[id] = new Chart(document.getElementById(id), config);
+}
+
+// ── Load all records from Firestore ──────────────────────────────────────
+window.loadAll = async function() {
+  spin(true);
+  try {
+    const q   = query(collection(db,'attendance'), orderBy('date','desc'));
+    const snap= await getDocs(q);
+    ALL_RECORDS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    populateGradeFilters();
+    renderDaily();
+    toast(`Loaded ${ALL_RECORDS.length} records`, 'success');
+  } catch(err) {
+    toast('Firebase error: ' + err.message, 'error');
+  } finally { spin(false); }
+};
+
+function populateGradeFilters() {
+  const grades = [...new Set(ALL_RECORDS.map(r=>r.grade))].sort();
+  ['f-grade-daily','f-absent-grade','f-rec-grade'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = '<option value="">All Grades</option>';
+    grades.forEach(g => el.innerHTML += `<option value="${g}">${g}</option>`);
+  });
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────
+window.switchTab = function(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn')  .forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  event.target.classList.add('active');
+  if (name==='weekly')  renderWeekly();
+  if (name==='monthly') renderMonthly();
+  if (name==='absent')  renderAbsent();
+  if (name==='records') renderRecords();
+};
+
+// ── DAILY ─────────────────────────────────────────────────────────────────
+window.renderDaily = function() {
+  const dateEl  = document.getElementById('f-date');
+  const cycleEl = document.getElementById('f-cycle-daily');
+  const gradeEl = document.getElementById('f-grade-daily');
+
+  let target = dateEl.value || new Date().toISOString().split('T')[0];
+  let recs   = ALL_RECORDS.filter(r => r.date === target);
+  if (cycleEl.value) recs = recs.filter(r => r.cycle === cycleEl.value);
+  if (gradeEl.value) recs = recs.filter(r => r.grade === gradeEl.value);
+
+  // Stats
+  const totStudents = recs.reduce((s,r)=>s+(r.totalStudents||0),0);
+  const totPresent  = recs.reduce((s,r)=>s+(r.present||0),0);
+  const totAuth     = recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
+  const totUnauth   = recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
+  const avgPct      = recs.length ? Math.round(recs.reduce((s,r)=>s+(r.attendancePct||0),0)/recs.length) : 0;
+
+  document.getElementById('daily-stats').innerHTML = `
+    <div class="stat-box green"><div class="num">${fmt(totPresent)}</div><div class="lbl">Present</div></div>
+    <div class="stat-box gold"><div class="num">${fmt(totAuth)}</div><div class="lbl">Auth Absent</div></div>
+    <div class="stat-box danger"><div class="num">${fmt(totUnauth)}</div><div class="lbl">Unauth Absent</div></div>
+    <div class="stat-box info"><div class="num">${avgPct}%</div><div class="lbl">Avg Attendance</div></div>
+    <div class="stat-box info"><div class="num">${recs.length}</div><div class="lbl">Classes Submitted</div></div>
+  `;
+
+  // Table
+  const tbody = document.getElementById('tbody-daily');
+  if (!recs.length) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-muted)">No data for ${target}</td></tr>`;
+  } else {
+    tbody.innerHTML = recs.map(r => {
+      const pc = r.attendancePct||0;
+      const cls= pc<70?'danger':pc<85?'gold':'green';
+      return `<tr>
+        <td><strong>${r.className}</strong></td>
+        <td>${r.grade}</td><td>${r.section}</td><td>${r.cycle}</td>
+        <td>${r.totalStudents}</td><td>${r.present}</td>
+        <td>${r.authorizedAbsent}</td><td>${r.unauthorizedAbsent}</td>
+        <td>${badge(pc+'%', cls)}</td>
+        <td>${r.teacherName}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Trend chart – last 14 days from target
+  const end   = new Date(target+'T00:00:00');
+  const days  = Array.from({length:14},(_,i)=>{
+    const d = new Date(end); d.setDate(d.getDate()-13+i);
+    return d.toISOString().split('T')[0];
+  });
+  const trendPresent  = days.map(d=>ALL_RECORDS.filter(r=>r.date===d).reduce((s,r)=>s+(r.present||0),0));
+  const trendAbsent   = days.map(d=>ALL_RECORDS.filter(r=>r.date===d).reduce((s,r)=>s+(r.unauthorizedAbsent||0),0));
+  const trendAuth     = days.map(d=>ALL_RECORDS.filter(r=>r.date===d).reduce((s,r)=>s+(r.authorizedAbsent||0),0));
+
+  makeChart('chart-daily-trend',{
+    type:'line',
+    data:{
+      labels: days.map(d=>d.slice(5)),
+      datasets:[
+        {label:'Present',     data:trendPresent, borderColor:PALETTE.green[0], backgroundColor:PALETTE.green[1], fill:true, tension:.35},
+        {label:'Auth Absent', data:trendAuth,    borderColor:PALETTE.gold[0],  backgroundColor:PALETTE.gold[1],  fill:true, tension:.35},
+        {label:'Unauth Absent',data:trendAbsent, borderColor:PALETTE.red[0],   backgroundColor:PALETTE.red[1],   fill:true, tension:.35},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}}}
+  });
+
+  // Cycle chart
+  const cycles = ['Kindergarten','Primary','Middle','Higher'];
+  const cycleData = cycles.map(c => {
+    const cr = recs.filter(r=>r.cycle===c);
+    return cr.length ? Math.round(cr.reduce((s,r)=>s+(r.attendancePct||0),0)/cr.length) : 0;
+  });
+  makeChart('chart-cycle',{
+    type:'bar',
+    data:{
+      labels:cycles,
+      datasets:[{label:'Avg Attendance %',data:cycleData,
+        backgroundColor:MULTI.slice(0,4), borderRadius:8}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{max:100,min:0}},
+      plugins:{legend:{display:false}}}
+  });
+
+  // Grade chart
+  const gradeMap = {};
+  recs.forEach(r => {
+    if(!gradeMap[r.grade]) gradeMap[r.grade]={sum:0,cnt:0};
+    gradeMap[r.grade].sum+=r.attendancePct||0;
+    gradeMap[r.grade].cnt++;
+  });
+  const gLabels = Object.keys(gradeMap).sort();
+  makeChart('chart-grade',{
+    type:'bar',
+    data:{
+      labels:gLabels,
+      datasets:[{label:'Avg %',data:gLabels.map(g=>Math.round(gradeMap[g].sum/gradeMap[g].cnt)),
+        backgroundColor:MULTI, borderRadius:8}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      scales:{x:{max:100,min:0}},plugins:{legend:{display:false}}}
+  });
+};
+
+// ── WEEKLY ────────────────────────────────────────────────────────────────
+window.renderWeekly = function() {
+  const wsEl    = document.getElementById('f-week-start');
+  const cycleEl = document.getElementById('f-cycle-weekly');
+  if (!wsEl.value) {
+    const now = new Date();
+    const mon = new Date(now); mon.setDate(now.getDate()-((now.getDay()+6)%7));
+    wsEl.value = mon.toISOString().split('T')[0];
+  }
+  const start = new Date(wsEl.value+'T00:00:00');
+  const days  = Array.from({length:7},(_,i)=>{ const d=new Date(start); d.setDate(d.getDate()+i); return d.toISOString().split('T')[0]; });
+  const DAYS_SHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+  let recs = ALL_RECORDS.filter(r=>days.includes(r.date));
+  if (cycleEl.value) recs=recs.filter(r=>r.cycle===cycleEl.value);
+
+  const totP = recs.reduce((s,r)=>s+(r.present||0),0);
+  const totA = recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
+  const totU = recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
+  const avgPct = recs.length ? Math.round(recs.reduce((s,r)=>s+(r.attendancePct||0),0)/recs.length) : 0;
+  document.getElementById('weekly-stats').innerHTML = `
+    <div class="stat-box green"><div class="num">${fmt(totP)}</div><div class="lbl">Total Present</div></div>
+    <div class="stat-box gold"><div class="num">${fmt(totA)}</div><div class="lbl">Auth Absent</div></div>
+    <div class="stat-box danger"><div class="num">${fmt(totU)}</div><div class="lbl">Unauth Absent</div></div>
+    <div class="stat-box info"><div class="num">${avgPct}%</div><div class="lbl">Avg Attendance</div></div>
+  `;
+
+  const dP=days.map(d=>recs.filter(r=>r.date===d).reduce((s,r)=>s+(r.present||0),0));
+  const dA=days.map(d=>recs.filter(r=>r.date===d).reduce((s,r)=>s+(r.authorizedAbsent||0),0));
+  const dU=days.map(d=>recs.filter(r=>r.date===d).reduce((s,r)=>s+(r.unauthorizedAbsent||0),0));
+
+  makeChart('chart-weekly-trend',{
+    type:'bar',
+    data:{labels:DAYS_SHORT,datasets:[
+      {label:'Present',     data:dP,backgroundColor:PALETTE.green[0]},
+      {label:'Auth Absent', data:dA,backgroundColor:PALETTE.gold[0]},
+      {label:'Unauth Absent',data:dU,backgroundColor:PALETTE.red[0]},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}}}
+  });
+
+  const grades = [...new Set(recs.map(r=>r.grade))].sort();
+  const gradeAvg = grades.map(g=>{
+    const gr = recs.filter(r=>r.grade===g);
+    return gr.length ? Math.round(gr.reduce((s,r)=>s+(r.attendancePct||0),0)/gr.length) : 0;
+  });
+  makeChart('chart-weekly-grade',{
+    type:'bar',
+    data:{labels:grades,datasets:[{label:'Avg %',data:gradeAvg,backgroundColor:MULTI,borderRadius:8}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{max:100,min:0}},plugins:{legend:{display:false}}}
+  });
+
+  const cycles = ['Kindergarten','Primary','Middle','Higher'];
+  const cycleAvg = cycles.map(c=>{
+    const cr=recs.filter(r=>r.cycle===c);
+    return cr.length?Math.round(cr.reduce((s,r)=>s+(r.attendancePct||0),0)/cr.length):0;
+  });
+  makeChart('chart-weekly-cycle',{
+    type:'doughnut',
+    data:{labels:cycles,datasets:[{data:cycleAvg,backgroundColor:MULTI.slice(0,4)}]},
+    options:{responsive:true,maintainAspectRatio:false}
+  });
+
+  // Table
+  const classMap = {};
+  recs.forEach(r => {
+    const k = r.className;
+    if (!classMap[k]) classMap[k]={grade:r.grade,section:r.section,cycle:r.cycle,days:0,pSum:0,aSum:0,uSum:0,pctSum:0};
+    classMap[k].days++; classMap[k].pSum+=r.present||0;
+    classMap[k].aSum+=r.authorizedAbsent||0; classMap[k].uSum+=r.unauthorizedAbsent||0;
+    classMap[k].pctSum+=r.attendancePct||0;
+  });
+  document.getElementById('tbody-weekly').innerHTML = Object.entries(classMap).map(([cls,v])=>`
+    <tr>
+      <td><strong>${cls}</strong></td><td>${v.grade}</td><td>${v.section}</td><td>${v.cycle}</td>
+      <td>${v.days}</td><td>${Math.round(v.pSum/v.days)}</td><td>${Math.round(v.aSum/v.days)}</td>
+      <td>${badge(Math.round(v.pctSum/v.days)+'%','green')}</td>
+    </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted)">No data this week</td></tr>';
+};
+
+// ── MONTHLY ───────────────────────────────────────────────────────────────
+window.renderMonthly = function() {
+  const mEl     = document.getElementById('f-month');
+  const cycleEl = document.getElementById('f-cycle-monthly');
+  if (!mEl.value) mEl.value = new Date().toISOString().slice(0,7);
+  const month = mEl.value;
+
+  let recs = ALL_RECORDS.filter(r=>r.date && r.date.startsWith(month));
+  if (cycleEl.value) recs=recs.filter(r=>r.cycle===cycleEl.value);
+
+  const totP   = recs.reduce((s,r)=>s+(r.present||0),0);
+  const totA   = recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
+  const totU   = recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
+  const avgPct = recs.length ? Math.round(recs.reduce((s,r)=>s+(r.attendancePct||0),0)/recs.length) : 0;
+  document.getElementById('monthly-stats').innerHTML=`
+    <div class="stat-box green"><div class="num">${fmt(totP)}</div><div class="lbl">Total Present</div></div>
+    <div class="stat-box gold"><div class="num">${fmt(totA)}</div><div class="lbl">Auth Absent</div></div>
+    <div class="stat-box danger"><div class="num">${fmt(totU)}</div><div class="lbl">Unauth Absent</div></div>
+    <div class="stat-box info"><div class="num">${avgPct}%</div><div class="lbl">Avg Attendance</div></div>
+  `;
+
+  const days = [...new Set(recs.map(r=>r.date))].sort();
+  const dP = days.map(d=>recs.filter(r=>r.date===d).reduce((s,r)=>s+(r.present||0),0));
+  const dA = days.map(d=>recs.filter(r=>r.date===d).reduce((s,r)=>s+(r.authorizedAbsent||0),0));
+  const dU = days.map(d=>recs.filter(r=>r.date===d).reduce((s,r)=>s+(r.unauthorizedAbsent||0),0));
+
+  makeChart('chart-monthly-trend',{
+    type:'line',
+    data:{labels:days.map(d=>d.slice(8)),datasets:[
+      {label:'Present',     data:dP,borderColor:PALETTE.green[0],backgroundColor:PALETTE.green[1],fill:true,tension:.35},
+      {label:'Auth Absent', data:dA,borderColor:PALETTE.gold[0], backgroundColor:PALETTE.gold[1], fill:true,tension:.35},
+      {label:'Unauth',      data:dU,borderColor:PALETTE.red[0],  backgroundColor:PALETTE.red[1],  fill:true,tension:.35},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}}}
+  });
+
+  const cycles=['Kindergarten','Primary','Middle','Higher'];
+  makeChart('chart-monthly-cycle',{
+    type:'polarArea',
+    data:{labels:cycles,datasets:[{data:cycles.map(c=>{
+      const cr=recs.filter(r=>r.cycle===c);
+      return cr.length?Math.round(cr.reduce((s,r)=>s+(r.attendancePct||0),0)/cr.length):0;
+    }),backgroundColor:MULTI.slice(0,4)}]},
+    options:{responsive:true,maintainAspectRatio:false}
+  });
+
+  const grades=[...new Set(recs.map(r=>r.grade))].sort();
+  makeChart('chart-monthly-grade',{
+    type:'bar',
+    data:{labels:grades,datasets:[{label:'Avg %',data:grades.map(g=>{
+      const gr=recs.filter(r=>r.grade===g);
+      return gr.length?Math.round(gr.reduce((s,r)=>s+(r.attendancePct||0),0)/gr.length):0;
+    }),backgroundColor:MULTI,borderRadius:8}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{max:100,min:0}},plugins:{legend:{display:false}}}
+  });
+
+  const classMap={};
+  recs.forEach(r=>{
+    const k=r.className;
+    if(!classMap[k])classMap[k]={grade:r.grade,section:r.section,cycle:r.cycle,days:0,pSum:0,aSum:0,uSum:0,pctSum:0};
+    classMap[k].days++;classMap[k].pSum+=r.present||0;classMap[k].aSum+=r.authorizedAbsent||0;
+    classMap[k].uSum+=r.unauthorizedAbsent||0;classMap[k].pctSum+=r.attendancePct||0;
+  });
+  document.getElementById('tbody-monthly').innerHTML=Object.entries(classMap).map(([cls,v])=>`
+    <tr>
+      <td><strong>${cls}</strong></td><td>${v.grade}</td><td>${v.section}</td><td>${v.cycle}</td>
+      <td>${v.days}</td><td>${Math.round(v.pSum/v.days)}</td><td>${v.aSum}</td><td>${v.uSum}</td>
+      <td>${badge(Math.round(v.pctSum/v.days)+'%','green')}</td>
+    </tr>`).join('')||'<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-muted)">No data this month</td></tr>';
+};
+
+// ── STUDENT SEARCH ────────────────────────────────────────────────────────
+window.searchStudent = function() {
+  const q    = document.getElementById('student-search').value.trim().toLowerCase();
+  const type = document.getElementById('student-type').value;
+  const res  = document.getElementById('student-results');
+  const cw   = document.getElementById('student-chart-wrap');
+
+  if (q.length < 2) { res.innerHTML=''; cw.style.display='none'; return; }
+
+  const hits = [];
+  ALL_RECORDS.forEach(r => {
+    const checkAuth  = (!type || type==='authorized')   && r.authNames;
+    const checkUnauth= (!type || type==='unauthorized') && r.unauthNames;
+    if (checkAuth   && r.authNames.toLowerCase().includes(q)) {
+      hits.push({date:r.date,class:r.className,cycle:r.cycle,grade:r.grade,type:'Authorized',teacher:r.teacherName});
+    }
+    if (checkUnauth && r.unauthNames.toLowerCase().includes(q)) {
+      hits.push({date:r.date,class:r.className,cycle:r.cycle,grade:r.grade,type:'Unauthorized',teacher:r.teacherName});
+    }
+  });
+
+  if (!hits.length) {
+    res.innerHTML = `<div class="alert alert-info">ℹ️ No absence records found for "${q}"</div>`;
+    cw.style.display='none'; return;
+  }
+
+  hits.sort((a,b)=>b.date.localeCompare(a.date));
+  res.innerHTML = `
+    <div class="alert alert-info" style="margin-bottom:12px;">Found ${hits.length} absence record(s)</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Date</th><th>Class</th><th>Grade</th><th>Cycle</th><th>Type</th><th>Class Teacher</th></tr></thead>
+      <tbody>${hits.map(h=>`
+        <tr class="${h.type==='Unauthorized'?'absent-row':''}">
+          <td>${h.date}</td><td>${h.class}</td><td>${h.grade}</td><td>${h.cycle}</td>
+          <td>${badge(h.type, h.type==='Authorized'?'gold':'danger')}</td>
+          <td>${h.teacher}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+
+  // Monthly absence chart
+  const monthMap={};
+  hits.forEach(h=>{
+    const m=h.date.slice(0,7);
+    monthMap[m]=(monthMap[m]||0)+1;
+  });
+  const mLabels=Object.keys(monthMap).sort();
+  cw.style.display='block';
+  makeChart('chart-student',{
+    type:'bar',
+    data:{labels:mLabels,datasets:[{label:'Absences',data:mLabels.map(m=>monthMap[m]),
+      backgroundColor:PALETTE.red[0],borderRadius:8}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}
+  });
+};
+
+// ── ABSENT REGISTER ───────────────────────────────────────────────────────
+window.renderAbsent = function() {
+  const from  = document.getElementById('f-absent-from').value;
+  const to    = document.getElementById('f-absent-to').value;
+  const type  = document.getElementById('f-absent-type').value;
+  const grade = document.getElementById('f-absent-grade').value;
+
+  let recs = ALL_RECORDS;
+  if (from)  recs=recs.filter(r=>r.date>=from);
+  if (to)    recs=recs.filter(r=>r.date<=to);
+  if (grade) recs=recs.filter(r=>r.grade===grade);
+
+  const rows = [];
+  recs.forEach(r => {
+    if ((!type||type==='authorized') && r.authNames) {
+      r.authNames.split(',').map(s=>s.trim()).filter(Boolean).forEach(name=>{
+        rows.push({date:r.date,class:r.className,grade:r.grade,cycle:r.cycle,
+          name,type:'Authorized',teacher:r.teacherName});
+      });
+    }
+    if ((!type||type==='unauthorized') && r.unauthNames) {
+      r.unauthNames.split(',').map(s=>s.trim()).filter(Boolean).forEach(name=>{
+        rows.push({date:r.date,class:r.className,grade:r.grade,cycle:r.cycle,
+          name,type:'Unauthorized',teacher:r.teacherName});
+      });
+    }
+  });
+
+  rows.sort((a,b)=>b.date.localeCompare(a.date));
+
+  const auth   = rows.filter(r=>r.type==='Authorized').length;
+  const unauth = rows.filter(r=>r.type==='Unauthorized').length;
+  document.getElementById('absent-stats').innerHTML=`
+    <div class="stat-box gold"><div class="num">${auth}</div><div class="lbl">Authorized Absences</div></div>
+    <div class="stat-box danger"><div class="num">${unauth}</div><div class="lbl">Unauthorized Absences</div></div>
+    <div class="stat-box info"><div class="num">${rows.length}</div><div class="lbl">Total Entries</div></div>
+  `;
+
+  document.getElementById('tbody-absent').innerHTML = rows.length
+    ? rows.map(r=>`
+        <tr class="${r.type==='Unauthorized'?'absent-row':''}">
+          <td>${r.date}</td><td><strong>${r.class}</strong></td><td>${r.grade}</td><td>${r.cycle}</td>
+          <td><strong>${r.name}</strong></td>
+          <td>${badge(r.type, r.type==='Authorized'?'gold':'danger')}</td>
+          <td>${r.teacher}</td>
+        </tr>`).join('')
+    : '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted)">No absent records found</td></tr>';
+};
+
+// ── ALL RECORDS ───────────────────────────────────────────────────────────
+window.renderRecords = function() {
+  const from  = document.getElementById('f-rec-from').value;
+  const to    = document.getElementById('f-rec-to').value;
+  const cycle = document.getElementById('f-rec-cycle').value;
+  const grade = document.getElementById('f-rec-grade').value;
+
+  let recs = ALL_RECORDS;
+  if (from)  recs=recs.filter(r=>r.date>=from);
+  if (to)    recs=recs.filter(r=>r.date<=to);
+  if (cycle) recs=recs.filter(r=>r.cycle===cycle);
+  if (grade) recs=recs.filter(r=>r.grade===grade);
+
+  document.getElementById('tbody-records').innerHTML = recs.length
+    ? recs.map(r=>{
+        const pc=r.attendancePct||0;
+        const cls=pc<70?'danger':pc<85?'gold':'green';
+        return `<tr>
+          <td>${r.date}</td><td>${r.day||''}</td>
+          <td><strong>${r.className}</strong></td><td>${r.cycle}</td>
+          <td>${r.totalStudents}</td><td>${r.present}</td>
+          <td>${r.authorizedAbsent}</td><td>${r.unauthorizedAbsent}</td>
+          <td>${badge(pc+'%',cls)}</td>
+          <td>${r.teacherName}</td>
+          <td>
+            <button class="btn btn-danger btn-sm" onclick="deleteRecord('${r.id}')">🗑️ Delete</button>
+          </td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--text-muted)">No records found</td></tr>';
+};
+
+// ── DELETE ────────────────────────────────────────────────────────────────
+window.deleteRecord = async function(id) {
+  if (!confirm('Are you sure you want to delete this attendance record? This cannot be undone.')) return;
+  spin(true);
+  try {
+    await deleteDoc(doc(db,'attendance',id));
+    ALL_RECORDS = ALL_RECORDS.filter(r=>r.id!==id);
+    renderRecords();
+    toast('Record deleted.','success');
+  } catch(err) {
+    toast('Delete failed: '+err.message,'error');
+  } finally { spin(false); }
+};
+
+// ── PDF DOWNLOAD ──────────────────────────────────────────────────────────
+window.downloadFullPDF = function() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+
+  const now   = new Date();
+  const today = now.toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const date  = document.getElementById('f-date').value || now.toISOString().split('T')[0];
+  let   recs  = ALL_RECORDS.filter(r=>r.date===date);
+
+  // Header
+  doc.setFillColor(10,124,78);
+  doc.rect(0,0,297,28,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(16); doc.setFont('helvetica','bold');
+  doc.text('Pakistan Islamia Higher Secondary School, Sharjah',148.5,10,{align:'center'});
+  doc.setFontSize(10); doc.setFont('helvetica','normal');
+  doc.text(`Daily Attendance Report — ${date}  |  Generated: ${today}`,148.5,18,{align:'center'});
+
+  // Stats
+  const totP   = recs.reduce((s,r)=>s+(r.present||0),0);
+  const totA   = recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
+  const totU   = recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
+  const totT   = recs.reduce((s,r)=>s+(r.totalStudents||0),0);
+  const avgPct = recs.length ? Math.round(recs.reduce((s,r)=>s+(r.attendancePct||0),0)/recs.length) : 0;
+  doc.setTextColor(10,124,78); doc.setFontSize(10); doc.setFont('helvetica','bold');
+  doc.text(`Total: ${totT}  |  Present: ${totP}  |  Auth Absent: ${totA}  |  Unauth Absent: ${totU}  |  Avg Attendance: ${avgPct}%`, 148.5, 34, {align:'center'});
+
+  // Table
+  doc.autoTable({
+    startY: 40,
+    head:[['Class','Grade','Section','Cycle','Total','Present','Auth Absent','Unauth Absent','Attendance %','Class Teacher']],
+    body: recs.map(r=>[r.className,r.grade,r.section,r.cycle,
+      r.totalStudents,r.present,r.authorizedAbsent,r.unauthorizedAbsent,
+      (r.attendancePct||0)+'%',r.teacherName]),
+    styles:{fontSize:8,cellPadding:2.5},
+    headStyles:{fillColor:[10,124,78],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[238,243,238]},
+    columnStyles:{8:{halign:'center'}}
+  });
+
+  // Absent register page
+  doc.addPage();
+  doc.setFillColor(192,57,43); doc.rect(0,0,297,18,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(13); doc.setFont('helvetica','bold');
+  doc.text('Absent Student Register', 148.5, 12, {align:'center'});
+
+  const absentRows = [];
+  recs.forEach(r=>{
+    (r.authNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(name=>
+      absentRows.push([r.date,r.className,r.grade,name,'Authorized',r.teacherName]));
+    (r.unauthNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(name=>
+      absentRows.push([r.date,r.className,r.grade,name,'Unauthorized',r.teacherName]));
+  });
+
+  doc.autoTable({
+    startY:22,
+    head:[['Date','Class','Grade','Student Name','Type','Class Teacher']],
+    body: absentRows.length ? absentRows : [['—','—','—','No absent students recorded','—','—']],
+    styles:{fontSize:9,cellPadding:2.5},
+    headStyles:{fillColor:[192,57,43],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[253,238,235]},
+  });
+
+  doc.save(`PIHSS_Attendance_${date}.pdf`);
+  toast('PDF downloaded!','success');
+};
+
+// ── Init ──────────────────────────────────────────────────────────────────
+const todayStr = new Date().toISOString().split('T')[0];
+document.getElementById('f-date').value = todayStr;
+
+const mon = new Date(); mon.setDate(mon.getDate()-((mon.getDay()+6)%7));
+document.getElementById('f-week-start').value = mon.toISOString().split('T')[0];
+document.getElementById('f-month').value = todayStr.slice(0,7);
+
+const threeDaysAgo = new Date(); threeDaysAgo.setDate(threeDaysAgo.getDate()-7);
+document.getElementById('f-absent-from').value = threeDaysAgo.toISOString().split('T')[0];
+document.getElementById('f-absent-to').value   = todayStr;
+document.getElementById('f-rec-from').value    = threeDaysAgo.toISOString().split('T')[0];
+document.getElementById('f-rec-to').value      = todayStr;
+
+loadAll();
+</script>
+</body>
+</html>

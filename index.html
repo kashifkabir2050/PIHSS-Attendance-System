@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Attendance Form – PIHSS Sharjah</title>
+<link rel="stylesheet" href="css/style.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="site-header">
+  <div class="header-inner">
+    <div class="header-logo">پ</div>
+    <div class="header-text">
+      <h1>Pakistan Islamia Higher Secondary School</h1>
+      <p>Sharjah, UAE — Daily Attendance System</p>
+    </div>
+    <nav class="header-nav">
+      <a href="index.html"     class="nav-btn active">📝 Submit Attendance</a>
+      <a href="dashboard.html" class="nav-btn">📊 Dashboard</a>
+    </nav>
+  </div>
+</header>
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container"></div>
+
+<!-- SPINNER -->
+<div class="spinner-overlay" id="spinner" style="display:none">
+  <div class="spinner"></div>
+  <div class="spinner-text">Saving attendance…</div>
+</div>
+
+<!-- MAIN -->
+<main class="page-wrap">
+  <div class="page-title">📝 Daily Attendance Submission</div>
+  <p class="page-sub">Fill in the form below for your class. All fields marked <span style="color:var(--danger)">*</span> are required.</p>
+
+  <div id="alert-area"></div>
+
+  <!-- SECTION 1 — DATE / CYCLE -->
+  <div class="card">
+    <div class="card-title"><span class="icon">📅</span> Date, Day & Cycle Information</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Date <span style="color:var(--danger)">*</span></label>
+        <input type="date" id="date" required/>
+      </div>
+      <div class="form-group">
+        <label>Day</label>
+        <input type="text" id="day" readonly placeholder="Auto-filled"/>
+      </div>
+      <div class="form-group">
+        <label>Cycle <span style="color:var(--danger)">*</span></label>
+        <select id="cycle" required>
+          <option value="">— Select Cycle —</option>
+          <option value="Kindergarten">Kindergarten</option>
+          <option value="Primary">Primary</option>
+          <option value="Middle">Middle</option>
+          <option value="Higher">Higher</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 2 — GRADE / SECTION -->
+  <div class="card">
+    <div class="card-title"><span class="icon">🏫</span> Grade & Section</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Grade <span style="color:var(--danger)">*</span></label>
+        <select id="grade" required>
+          <option value="">— Select Grade —</option>
+          <optgroup label="Kindergarten">
+            <option value="KG 1">KG 1</option>
+            <option value="KG 2">KG 2</option>
+          </optgroup>
+          <optgroup label="Primary (1–5)">
+            <option value="1">Grade 1</option>
+            <option value="2">Grade 2</option>
+            <option value="3">Grade 3</option>
+            <option value="4">Grade 4</option>
+            <option value="5">Grade 5</option>
+          </optgroup>
+          <optgroup label="Middle (6–9)">
+            <option value="6">Grade 6</option>
+            <option value="7">Grade 7</option>
+            <option value="8">Grade 8</option>
+            <option value="9">Grade 9</option>
+          </optgroup>
+          <optgroup label="Higher (10–12)">
+            <option value="10">Grade 10</option>
+            <option value="11">Grade 11</option>
+            <option value="12">Grade 12</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Section <span style="color:var(--danger)">*</span></label>
+        <select id="section" required>
+          <option value="">— Select Section —</option>
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+          <option value="D">D</option>
+          <option value="E">E</option>
+          <option value="F">F</option>
+          <option value="AB">AB</option>
+          <option value="BB">BB</option>
+          <option value="BC">BC</option>
+          <option value="BD">BD</option>
+          <option value="AG">AG</option>
+          <option value="BG">BG</option>
+          <option value="CG">CG</option>
+          <option value="DG">DG</option>
+        </select>
+      </div>
+    </div>
+    <div id="class-preview" style="display:none; margin-top:8px;">
+      <span class="badge badge-green" id="class-badge"></span>
+    </div>
+  </div>
+
+  <!-- SECTION 3 — STUDENT COUNTS -->
+  <div class="card">
+    <div class="card-title"><span class="icon">👥</span> Student Counts</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Total Students in Class <span style="color:var(--danger)">*</span></label>
+        <input type="number" id="total-students" min="0" placeholder="e.g. 32" required/>
+      </div>
+      <div class="form-group">
+        <label>Authorized Absent <span style="color:var(--danger)">*</span></label>
+        <input type="number" id="auth-absent" min="0" value="0" placeholder="0"/>
+      </div>
+      <div class="form-group">
+        <label>Unauthorized Absent <span style="color:var(--danger)">*</span></label>
+        <input type="number" id="unauth-absent" min="0" value="0" placeholder="0"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 4 — ABSENT STUDENT NAMES -->
+  <div class="card">
+    <div class="card-title"><span class="icon">📋</span> Absent Student Names</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Names of Authorized Absent Students</label>
+        <textarea id="auth-names" placeholder="Enter names separated by commas&#10;e.g. Fatima Ali, Ahmed Khan"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Names of Unauthorized Absent Students</label>
+        <textarea id="unauth-names" placeholder="Enter names separated by commas&#10;e.g. Sara Malik, Bilal Ahmed"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 5 — ATTENDANCE SUMMARY (auto-calculated) -->
+  <div class="card">
+    <div class="card-title"><span class="icon">📊</span> Attendance Summary <small style="font-weight:400;color:var(--text-muted);font-size:.82rem;">(Auto-calculated)</small></div>
+    <div class="stats-row">
+      <div class="stat-box green">
+        <div class="num" id="calc-present">—</div>
+        <div class="lbl">Present</div>
+      </div>
+      <div class="stat-box gold">
+        <div class="num" id="calc-auth">—</div>
+        <div class="lbl">Authorized Absent</div>
+      </div>
+      <div class="stat-box danger">
+        <div class="num" id="calc-unauth">—</div>
+        <div class="lbl">Unauth. Absent</div>
+      </div>
+      <div class="stat-box info">
+        <div class="num" id="calc-total">—</div>
+        <div class="lbl">Total Students</div>
+      </div>
+    </div>
+    <div style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-weight:600;color:var(--text-muted);font-size:.85rem;">Attendance Rate (Present + Authorized)</span>
+        <span id="calc-pct" style="font-weight:800;color:var(--green);font-size:1.1rem;">—%</span>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-fill" id="progress-bar" style="width:0%"></div>
+      </div>
+    </div>
+    <div style="margin-top:14px;padding:12px 16px;background:var(--surface);border-radius:var(--radius-sm);">
+      <span style="font-size:.82rem;color:var(--text-muted);">
+        ℹ️ <strong>Formula:</strong> Present = Total − Authorized Absent − Unauthorized Absent &nbsp;|&nbsp; Attendance % = (Present + Authorized Absent) ÷ Total × 100
+      </span>
+    </div>
+  </div>
+
+  <!-- SECTION 6 — TEACHER -->
+  <div class="card">
+    <div class="card-title"><span class="icon">👩‍🏫</span> Class Teacher</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Class Teacher Name <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="teacher-name" placeholder="Full Name" required/>
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="submitAttendance()">✅ Submit Attendance</button>
+      <button class="btn btn-outline" onclick="clearForm()">🔄 Clear Form</button>
+    </div>
+  </div>
+</main>
+
+<script type="module">
+// ── Firebase imports ──────────────────────────────────────────────────────
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, Timestamp
+} from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
+
+// ▶▶ REPLACE WITH YOUR FIREBASE CONFIG ◀◀
+const firebaseConfig = {
+    apiKey: "AIzaSyD3EputWhUMKuXTgYSXy5RUyPdL9xxgBl4",
+    authDomain: "pihss-attendance.firebaseapp.com",
+    projectId: "pihss-attendance",
+    storageBucket: "pihss-attendance.firebasestorage.app",
+    messagingSenderId: "1048675189447",
+    appId: "1:1048675189447:web:42ab613d641bbfa297f4e2"
+  };
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+
+// ── Days array ────────────────────────────────────────────────────────────
+const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+// ── Set today's date ──────────────────────────────────────────────────────
+const dateEl = document.getElementById('date');
+dateEl.value = new Date().toISOString().split('T')[0];
+updateDay();
+
+// ── Event listeners ───────────────────────────────────────────────────────
+dateEl.addEventListener('change', updateDay);
+document.getElementById('grade')   .addEventListener('change', updateClassBadge);
+document.getElementById('section') .addEventListener('change', updateClassBadge);
+
+['total-students','auth-absent','unauth-absent'].forEach(id =>
+  document.getElementById(id).addEventListener('input', recalculate)
+);
+
+function updateDay() {
+  const d = new Date(dateEl.value + 'T00:00:00');
+  document.getElementById('day').value = DAYS[d.getDay()] || '';
+}
+
+function updateClassBadge() {
+  const g = document.getElementById('grade').value;
+  const s = document.getElementById('section').value;
+  const preview = document.getElementById('class-preview');
+  const badge   = document.getElementById('class-badge');
+  if (g && s) {
+    badge.textContent = `Class: ${g}${s}`;
+    preview.style.display = 'block';
+  } else {
+    preview.style.display = 'none';
+  }
+  recalculate();
+}
+
+function recalculate() {
+  const total  = parseInt(document.getElementById('total-students').value)  || 0;
+  const auth   = parseInt(document.getElementById('auth-absent').value)     || 0;
+  const unauth = parseInt(document.getElementById('unauth-absent').value)   || 0;
+  const present = Math.max(0, total - auth - unauth);
+  const pct     = total > 0 ? Math.round(((present + auth) / total) * 100) : 0;
+
+  document.getElementById('calc-present').textContent = present;
+  document.getElementById('calc-auth')   .textContent = auth;
+  document.getElementById('calc-unauth') .textContent = unauth;
+  document.getElementById('calc-total')  .textContent = total;
+  document.getElementById('calc-pct')    .textContent = pct + '%';
+
+  const bar = document.getElementById('progress-bar');
+  bar.style.width = pct + '%';
+  bar.className = 'progress-fill' + (pct < 70 ? ' low' : pct < 85 ? ' mid' : '');
+}
+
+// ── Toast helper ──────────────────────────────────────────────────────────
+function toast(msg, type='success') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+// ── Submit ────────────────────────────────────────────────────────────────
+window.submitAttendance = async function() {
+  const fields = ['date','cycle','grade','section','total-students','teacher-name'];
+  for (const f of fields) {
+    const el = document.getElementById(f);
+    if (!el.value.trim()) {
+      toast(`Please fill in: ${el.labels?.[0]?.textContent || f}`, 'error');
+      el.focus();
+      return;
+    }
+  }
+
+  const total   = parseInt(document.getElementById('total-students').value)  || 0;
+  const auth    = parseInt(document.getElementById('auth-absent').value)     || 0;
+  const unauth  = parseInt(document.getElementById('unauth-absent').value)   || 0;
+  const present = Math.max(0, total - auth - unauth);
+  const pct     = total > 0 ? Math.round(((present + auth) / total) * 100) : 0;
+  const grade   = document.getElementById('grade').value;
+  const section = document.getElementById('section').value;
+
+  const record = {
+    date:           document.getElementById('date').value,
+    day:            document.getElementById('day').value,
+    cycle:          document.getElementById('cycle').value,
+    grade,
+    section,
+    className:      `${grade}${section}`,
+    totalStudents:  total,
+    authorizedAbsent:   auth,
+    unauthorizedAbsent: unauth,
+    present,
+    attendancePct:  pct,
+    authNames:      document.getElementById('auth-names').value.trim(),
+    unauthNames:    document.getElementById('unauth-names').value.trim(),
+    teacherName:    document.getElementById('teacher-name').value.trim(),
+    submittedAt:    Timestamp.now()
+  };
+
+  document.getElementById('spinner').style.display = 'flex';
+  try {
+    await addDoc(collection(db, 'attendance'), record);
+    toast('✅ Attendance submitted successfully!', 'success');
+    clearForm();
+  } catch (err) {
+    toast('❌ Error: ' + err.message, 'error');
+  } finally {
+    document.getElementById('spinner').style.display = 'none';
+  }
+};
+
+window.clearForm = function() {
+  ['date','cycle','grade','section','total-students','auth-absent',
+   'unauth-absent','auth-names','unauth-names','teacher-name'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el.tagName === 'SELECT') el.selectedIndex = 0;
+    else if (id === 'auth-absent' || id === 'unauth-absent') el.value = 0;
+    else el.value = '';
+  });
+  dateEl.value = new Date().toISOString().split('T')[0];
+  updateDay();
+  recalculate();
+  document.getElementById('class-preview').style.display = 'none';
+};
+
+// Initial calc
+recalculate();
+</script>
+</body>
+</html>
