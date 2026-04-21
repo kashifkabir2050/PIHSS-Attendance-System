@@ -300,6 +300,53 @@ tbody td { padding: 10px 13px; }
 .empty-state { text-align: center; padding: 48px 20px; color: var(--ink-soft); }
 .empty-state .eicon { font-size: 3rem; margin-bottom: 12px; }
 
+/* ── Login Modal ─── */
+.login-overlay {
+  position: fixed; inset: 0;
+  background: rgba(6,78,59,0.85);
+  backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 10000;
+}
+.login-box {
+  background: white; border-radius: 24px;
+  padding: 44px 40px; width: 100%; max-width: 400px;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.35);
+  text-align: center;
+  animation: popIn .3s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes popIn { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.login-logo {
+  width: 68px; height: 68px;
+  background: linear-gradient(135deg, var(--gold), var(--gold-light));
+  border-radius: 18px; margin: 0 auto 18px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Amiri', serif; font-size: 30px; color: white;
+  box-shadow: 0 6px 20px rgba(217,119,6,0.4);
+}
+.login-title { font-size: 1.35rem; font-weight: 800; color: var(--emerald-deep); margin-bottom: 4px; }
+.login-sub   { font-size: .8rem; color: var(--ink-soft); margin-bottom: 28px; }
+.login-field { position: relative; margin-bottom: 16px; text-align: left; }
+.login-field label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--ink-soft); display: block; margin-bottom: 6px; }
+.login-field input {
+  width: 100%; padding: 12px 14px 12px 42px;
+  border: 2px solid #e2e8f0; border-radius: var(--r-sm);
+  font-family: 'Sora', sans-serif; font-size: .92rem; color: var(--ink);
+  background: #fafafa; outline: none; transition: all .2s;
+}
+.login-field input:focus { border-color: var(--emerald); background: white; box-shadow: 0 0 0 4px rgba(5,150,105,0.1); }
+.login-field .fi { position: absolute; left: 13px; bottom: 13px; font-size: 1rem; pointer-events: none; }
+.login-error { color: var(--ruby); font-size: .8rem; margin-bottom: 12px; min-height: 18px; font-weight: 600; }
+.login-btn {
+  width: 100%; padding: 13px;
+  background: linear-gradient(135deg, var(--emerald), var(--emerald-mid));
+  color: white; border: none; border-radius: 40px;
+  font-family: 'Sora', sans-serif; font-size: .95rem; font-weight: 700;
+  cursor: pointer; transition: all .22s;
+  box-shadow: 0 4px 16px rgba(5,150,105,0.35);
+}
+.login-btn:hover { filter: brightness(1.08); transform: translateY(-2px); }
+
 /* ── Responsive ─── */
 @media (max-width:640px) {
   .header-inner { flex-wrap: wrap; }
@@ -312,6 +359,27 @@ tbody td { padding: 10px 13px; }
 </style>
 </head>
 <body>
+
+<!-- LOGIN MODAL -->
+<div class="login-overlay" id="login-overlay">
+  <div class="login-box">
+    <div class="login-logo">پ</div>
+    <div class="login-title">PIHSS Dashboard</div>
+    <div class="login-sub">Pakistan Islamia Higher Secondary School, Sharjah<br>Please sign in to access the dashboard</div>
+    <div class="login-field">
+      <label>Username</label>
+      <span class="fi">👤</span>
+      <input type="text" id="login-user" placeholder="Enter username" autocomplete="username"/>
+    </div>
+    <div class="login-field">
+      <label>Password</label>
+      <span class="fi">🔒</span>
+      <input type="password" id="login-pass" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/>
+    </div>
+    <div class="login-error" id="login-error"></div>
+    <button class="login-btn" onclick="doLogin()">🔐 Sign In</button>
+  </div>
+</div>
 
 <!-- HEADER -->
 <header class="site-header">
@@ -370,12 +438,12 @@ tbody td { padding: 10px 13px; }
       <button class="cycle-tab" data-cycle="Middle" onclick="selectCycle(this,'Middle')">
         <span class="ct-icon">🏫</span>
         <span class="ct-label">Middle</span>
-        <span class="ct-range">Grades 6–9</span>
+        <span class="ct-range">Grades 6–8</span>
       </button>
       <button class="cycle-tab" data-cycle="Higher" onclick="selectCycle(this,'Higher')">
         <span class="ct-icon">🎓</span>
         <span class="ct-label">Higher</span>
-        <span class="ct-range">Grades 10–12</span>
+        <span class="ct-range">Grades 9–12</span>
       </button>
     </div>
   </div>
@@ -1046,6 +1114,24 @@ window.downloadFullPDF = function() {
   toast('✅ PDF downloaded!','success');
 };
 
+// ── LOGIN ─────────────────────────────────────────────────────────
+const LOGIN_CREDENTIALS = { username: 'admin', password: 'pihss2024' };
+
+window.doLogin = function() {
+  const u = document.getElementById('login-user').value.trim();
+  const p = document.getElementById('login-pass').value;
+  const err = document.getElementById('login-error');
+  if (u === LOGIN_CREDENTIALS.username && p === LOGIN_CREDENTIALS.password) {
+    document.getElementById('login-overlay').style.display = 'none';
+    err.textContent = '';
+    loadAll();
+  } else {
+    err.textContent = '⚠️ Invalid username or password.';
+    document.getElementById('login-pass').value = '';
+    document.getElementById('login-pass').focus();
+  }
+};
+
 // ── Init ──────────────────────────────────────────────────────────
 const todayStr = new Date().toISOString().split('T')[0];
 document.getElementById('f-date').value = todayStr;
@@ -1061,7 +1147,6 @@ document.getElementById('f-absent-to').value   = todayStr;
 document.getElementById('f-rec-from').value    = agoStr;
 document.getElementById('f-rec-to').value      = todayStr;
 
-loadAll();
 </script>
 </body>
 </html>
