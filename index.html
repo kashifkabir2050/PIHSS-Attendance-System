@@ -4,8 +4,355 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Attendance Form – PIHSS Sharjah</title>
-<link rel="stylesheet" href="css/style.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root {
+  --emerald:      #059669;
+  --emerald-deep: #064e3b;
+  --emerald-mid:  #047857;
+  --emerald-glow: #34d399;
+  --gold:         #d97706;
+  --gold-light:   #fbbf24;
+  --ruby:         #dc2626;
+  --sapphire:     #2563eb;
+  --ink:          #0f172a;
+  --ink-soft:     #334155;
+  --mist:         #f0fdf4;
+  --mist-dark:    #dcfce7;
+  --border-soft:  #bbf7d0;
+  --white:        #ffffff;
+  --shadow-green: 0 4px 24px rgba(5,150,105,0.15);
+  --shadow-deep:  0 16px 48px rgba(5,150,105,0.2);
+  --r:            16px;
+  --r-sm:         10px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 15px; scroll-behavior: smooth; }
+body {
+  font-family: 'Sora', sans-serif;
+  background: #f8fafc;
+  color: var(--ink);
+  min-height: 100vh;
+}
+/* ── Noise texture overlay ─── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Header ─── */
+.site-header {
+  background: linear-gradient(135deg, var(--emerald-deep) 0%, var(--emerald-mid) 50%, var(--emerald) 100%);
+  position: sticky; top: 0; z-index: 100;
+  box-shadow: 0 2px 32px rgba(0,0,0,0.3);
+}
+.header-inner {
+  max-width: 1100px; margin: 0 auto;
+  padding: 14px 28px;
+  display: flex; align-items: center; gap: 16px;
+}
+.header-logo {
+  width: 56px; height: 56px;
+  background: linear-gradient(135deg, var(--gold), var(--gold-light));
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Amiri', serif; font-size: 24px; color: white;
+  box-shadow: 0 4px 16px rgba(217,119,6,0.4);
+  flex-shrink: 0;
+}
+.header-text h1 {
+  font-family: 'Amiri', serif;
+  font-size: 1.25rem; color: white; line-height: 1.2;
+}
+.header-text p { font-size: .75rem; color: rgba(255,255,255,0.7); margin-top: 2px; }
+.header-nav { margin-left: auto; display: flex; gap: 8px; }
+.nav-btn {
+  padding: 8px 18px;
+  border-radius: 40px;
+  font-size: .8rem; font-weight: 600;
+  text-decoration: none; color: white;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  transition: all .2s;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.nav-btn:hover, .nav-btn.active {
+  background: var(--gold);
+  border-color: var(--gold);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(217,119,6,0.4);
+}
+
+/* ── Page layout ─── */
+.page-wrap { max-width: 960px; margin: 0 auto; padding: 36px 20px 80px; position: relative; z-index: 1; }
+
+.page-hero {
+  margin-bottom: 32px;
+  background: linear-gradient(135deg, var(--emerald-deep), var(--emerald));
+  border-radius: 20px;
+  padding: 32px 36px;
+  color: white;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  box-shadow: var(--shadow-deep);
+  overflow: hidden;
+  position: relative;
+}
+.page-hero::after {
+  content: '📋';
+  position: absolute; right: 28px; bottom: -10px;
+  font-size: 7rem; opacity: .1; line-height: 1;
+}
+.page-hero h2 { font-size: 1.7rem; font-weight: 800; line-height: 1.2; }
+.page-hero p { font-size: .88rem; opacity: .8; margin-top: 6px; }
+.hero-badge {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.25);
+  padding: 10px 20px; border-radius: 40px;
+  font-size: .82rem; font-weight: 700; white-space: nowrap;
+  backdrop-filter: blur(8px);
+}
+
+/* ── Cycle Tabs ─── */
+.cycle-tabs-wrap {
+  margin-bottom: 24px;
+}
+.cycle-tabs-label {
+  font-size: .72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1.2px; color: var(--ink-soft); margin-bottom: 10px;
+}
+.cycle-tabs {
+  display: flex; gap: 10px; flex-wrap: wrap;
+}
+.cycle-tab {
+  padding: 10px 22px;
+  border-radius: 40px;
+  border: 2px solid var(--border-soft);
+  background: white;
+  color: var(--ink-soft);
+  font-family: 'Sora', sans-serif;
+  font-size: .84rem; font-weight: 600;
+  cursor: pointer; transition: all .22s;
+  display: flex; align-items: center; gap: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+.cycle-tab:hover {
+  border-color: var(--emerald);
+  color: var(--emerald);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(5,150,105,0.15);
+}
+.cycle-tab.active {
+  background: var(--emerald);
+  border-color: var(--emerald);
+  color: white;
+  box-shadow: 0 6px 20px rgba(5,150,105,0.35);
+  transform: translateY(-2px);
+}
+.cycle-tab .cycle-icon { font-size: 1.1rem; }
+.cycle-tab .cycle-count {
+  background: rgba(255,255,255,0.25);
+  padding: 1px 7px; border-radius: 20px; font-size: .72rem;
+}
+.cycle-tab:not(.active) .cycle-count {
+  background: var(--mist-dark); color: var(--emerald);
+}
+
+/* ── Cards ─── */
+.card {
+  background: white;
+  border-radius: var(--r);
+  border: 1px solid var(--border-soft);
+  padding: 28px 30px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 12px rgba(5,150,105,0.06);
+  transition: box-shadow .2s;
+}
+.card:hover { box-shadow: var(--shadow-green); }
+.card-title {
+  font-size: .95rem; font-weight: 700;
+  color: var(--emerald-deep);
+  padding-bottom: 14px; margin-bottom: 18px;
+  border-bottom: 2px solid var(--mist-dark);
+  display: flex; align-items: center; gap: 10px;
+}
+.card-title .icon { font-size: 1.15rem; }
+
+/* ── Form elements ─── */
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label {
+  font-size: .72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .8px;
+  color: var(--ink-soft);
+}
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: 11px 14px;
+  border: 2px solid #e2e8f0;
+  border-radius: var(--r-sm);
+  font-family: 'Sora', sans-serif;
+  font-size: .9rem; color: var(--ink);
+  background: #fafafa;
+  transition: all .2s; outline: none;
+}
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: var(--emerald);
+  background: white;
+  box-shadow: 0 0 0 4px rgba(5,150,105,0.1);
+}
+.form-group input[readonly] {
+  background: var(--mist); color: var(--emerald-mid); font-weight: 600;
+}
+.form-group textarea { resize: vertical; min-height: 88px; }
+
+/* ── Stats row ─── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px; margin-bottom: 20px;
+}
+.stat-box {
+  border-radius: var(--r);
+  padding: 20px;
+  text-align: center;
+  border: 2px solid transparent;
+  position: relative; overflow: hidden;
+}
+.stat-box.green  { background: #f0fdf4; border-color: #bbf7d0; }
+.stat-box.gold   { background: #fffbeb; border-color: #fde68a; }
+.stat-box.danger { background: #fef2f2; border-color: #fecaca; }
+.stat-box.info   { background: #eff6ff; border-color: #bfdbfe; }
+.stat-box .num {
+  font-size: 2.2rem; font-weight: 800; line-height: 1; margin-bottom: 4px;
+}
+.stat-box.green  .num { color: var(--emerald); }
+.stat-box.gold   .num { color: var(--gold); }
+.stat-box.danger .num { color: var(--ruby); }
+.stat-box.info   .num { color: var(--sapphire); }
+.stat-box .lbl {
+  font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+  opacity: .7;
+}
+.stat-box.green  .lbl { color: var(--emerald-deep); }
+.stat-box.gold   .lbl { color: #92400e; }
+.stat-box.danger .lbl { color: #991b1b; }
+.stat-box.info   .lbl { color: #1e3a8a; }
+
+/* ── Progress bar ─── */
+.progress-wrap { background: #e2e8f0; border-radius: 20px; height: 10px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 20px; background: var(--emerald); transition: width .5s cubic-bezier(.4,0,.2,1); }
+.progress-fill.low { background: var(--ruby); }
+.progress-fill.mid { background: var(--gold); }
+
+/* ── Badge ─── */
+.badge {
+  display: inline-block; padding: 4px 12px;
+  border-radius: 20px; font-size: .73rem; font-weight: 700;
+}
+.badge-green  { background: var(--mist-dark); color: var(--emerald-deep); }
+.badge-gold   { background: #fef3c7; color: #92400e; }
+.badge-danger { background: #fee2e2; color: #991b1b; }
+.badge-info   { background: #dbeafe; color: #1e3a8a; }
+
+/* ── Buttons ─── */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 26px; border-radius: 40px;
+  font-family: 'Sora', sans-serif; font-size: .9rem; font-weight: 700;
+  cursor: pointer; border: none; transition: all .22s;
+  text-decoration: none;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--emerald), var(--emerald-mid));
+  color: white;
+  box-shadow: 0 4px 16px rgba(5,150,105,0.35);
+}
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--emerald-mid), var(--emerald-deep));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(5,150,105,0.4);
+}
+.btn-outline {
+  background: transparent;
+  border: 2px solid var(--emerald);
+  color: var(--emerald);
+}
+.btn-outline:hover { background: var(--emerald); color: white; transform: translateY(-2px); }
+.btn-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
+
+/* ── Toast ─── */
+#toast-container {
+  position: fixed; bottom: 24px; right: 24px;
+  z-index: 9999; display: flex; flex-direction: column; gap: 10px;
+}
+.toast {
+  padding: 14px 20px; border-radius: 12px;
+  font-size: .87rem; font-weight: 600; color: white;
+  min-width: 260px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  animation: slideUp .3s cubic-bezier(.4,0,.2,1);
+}
+.toast.success { background: linear-gradient(135deg, var(--emerald), var(--emerald-mid)); }
+.toast.error   { background: linear-gradient(135deg, var(--ruby), #b91c1c); }
+@keyframes slideUp {
+  from { transform: translateY(20px) scale(.95); opacity: 0; }
+  to   { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* ── Spinner ─── */
+.spinner-overlay {
+  position: fixed; inset: 0;
+  background: rgba(255,255,255,0.85); backdrop-filter: blur(4px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 9998; gap: 16px;
+}
+.spinner {
+  width: 46px; height: 46px;
+  border: 4px solid var(--mist-dark);
+  border-top-color: var(--emerald);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner-text { color: var(--emerald-mid); font-weight: 600; font-size: .9rem; }
+
+/* ── Formula note ─── */
+.formula-note {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: var(--mist);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-sm);
+  font-size: .8rem; color: var(--ink-soft);
+}
+
+/* ── Class preview ─── */
+#class-preview { margin-top: 10px; }
+
+/* ── Responsive ─── */
+@media (max-width: 640px) {
+  .header-inner { flex-wrap: wrap; }
+  .header-nav { width: 100%; justify-content: center; }
+  .page-wrap { padding: 20px 14px 60px; }
+  .form-row { grid-template-columns: 1fr; }
+  .stats-row { grid-template-columns: 1fr 1fr; }
+  .page-hero { padding: 24px 22px; }
+  .page-hero h2 { font-size: 1.3rem; }
+  .cycle-tabs { gap: 8px; }
+  .cycle-tab { padding: 8px 14px; font-size: .78rem; }
+}
+</style>
 </head>
 <body>
 
@@ -24,10 +371,8 @@
   </div>
 </header>
 
-<!-- TOAST CONTAINER -->
+<!-- TOAST & SPINNER -->
 <div id="toast-container"></div>
-
-<!-- SPINNER -->
 <div class="spinner-overlay" id="spinner" style="display:none">
   <div class="spinner"></div>
   <div class="spinner-text">Saving attendance…</div>
@@ -35,42 +380,66 @@
 
 <!-- MAIN -->
 <main class="page-wrap">
-  <div class="page-title">📝 Daily Attendance Submission</div>
-  <p class="page-sub">Fill in the form below for your class. All fields marked <span style="color:var(--danger)">*</span> are required.</p>
+
+  <!-- Hero -->
+  <div class="page-hero">
+    <div>
+      <h2>📝 Daily Attendance Submission</h2>
+      <p>Fill in the form below for your class. All fields marked <strong>*</strong> are required.</p>
+    </div>
+    <div class="hero-badge" id="today-display">Loading…</div>
+  </div>
+
+  <!-- CYCLE TABS -->
+  <div class="cycle-tabs-wrap">
+    <div class="cycle-tabs-label">Select School Cycle</div>
+    <div class="cycle-tabs">
+      <button class="cycle-tab" data-cycle="Kindergarten" onclick="selectCycle(this,'Kindergarten')">
+        <span class="cycle-icon">🌱</span> Kindergarten
+        <span class="cycle-count">KG 1–2</span>
+      </button>
+      <button class="cycle-tab" data-cycle="Primary" onclick="selectCycle(this,'Primary')">
+        <span class="cycle-icon">📚</span> Primary
+        <span class="cycle-count">G 1–5</span>
+      </button>
+      <button class="cycle-tab" data-cycle="Middle" onclick="selectCycle(this,'Middle')">
+        <span class="cycle-icon">🏫</span> Middle
+        <span class="cycle-count">G 6–9</span>
+      </button>
+      <button class="cycle-tab" data-cycle="Higher" onclick="selectCycle(this,'Higher')">
+        <span class="cycle-icon">🎓</span> Higher
+        <span class="cycle-count">G 10–12</span>
+      </button>
+    </div>
+  </div>
 
   <div id="alert-area"></div>
 
-  <!-- SECTION 1 — DATE / CYCLE -->
+  <!-- SECTION 1 — DATE -->
   <div class="card">
-    <div class="card-title"><span class="icon">📅</span> Date, Day & Cycle Information</div>
+    <div class="card-title"><span class="icon">📅</span> Date & Day Information</div>
     <div class="form-row">
       <div class="form-group">
-        <label>Date <span style="color:var(--danger)">*</span></label>
+        <label>Date <span style="color:var(--ruby)">*</span></label>
         <input type="date" id="date" required/>
       </div>
       <div class="form-group">
-        <label>Day</label>
+        <label>Day of Week</label>
         <input type="text" id="day" readonly placeholder="Auto-filled"/>
       </div>
       <div class="form-group">
-        <label>Cycle <span style="color:var(--danger)">*</span></label>
-        <select id="cycle" required>
-          <option value="">— Select Cycle —</option>
-          <option value="Kindergarten">Kindergarten</option>
-          <option value="Primary">Primary</option>
-          <option value="Middle">Middle</option>
-          <option value="Higher">Higher</option>
-        </select>
+        <label>Cycle <span style="color:var(--ruby)">*</span></label>
+        <input type="text" id="cycle" readonly placeholder="Select a cycle above" style="font-weight:700;color:var(--emerald)"/>
       </div>
     </div>
   </div>
 
-  <!-- SECTION 2 — GRADE / SECTION -->
+  <!-- SECTION 2 — GRADE/SECTION -->
   <div class="card">
     <div class="card-title"><span class="icon">🏫</span> Grade & Section</div>
     <div class="form-row">
       <div class="form-group">
-        <label>Grade <span style="color:var(--danger)">*</span></label>
+        <label>Grade <span style="color:var(--ruby)">*</span></label>
         <select id="grade" required>
           <option value="">— Select Grade —</option>
           <optgroup label="Kindergarten">
@@ -98,7 +467,7 @@
         </select>
       </div>
       <div class="form-group">
-        <label>Section <span style="color:var(--danger)">*</span></label>
+        <label>Section <span style="color:var(--ruby)">*</span></label>
         <select id="section" required>
           <option value="">— Select Section —</option>
           <option value="A">A</option>
@@ -118,8 +487,8 @@
         </select>
       </div>
     </div>
-    <div id="class-preview" style="display:none; margin-top:8px;">
-      <span class="badge badge-green" id="class-badge"></span>
+    <div id="class-preview" style="display:none; margin-top:12px;">
+      <span class="badge badge-green" id="class-badge" style="font-size:.88rem; padding:6px 16px;"></span>
     </div>
   </div>
 
@@ -128,38 +497,41 @@
     <div class="card-title"><span class="icon">👥</span> Student Counts</div>
     <div class="form-row">
       <div class="form-group">
-        <label>Total Students in Class <span style="color:var(--danger)">*</span></label>
+        <label>Total Students <span style="color:var(--ruby)">*</span></label>
         <input type="number" id="total-students" min="0" placeholder="e.g. 32" required/>
       </div>
       <div class="form-group">
-        <label>Authorized Absent <span style="color:var(--danger)">*</span></label>
-        <input type="number" id="auth-absent" min="0" value="0" placeholder="0"/>
+        <label>Authorized Absent <span style="color:var(--ruby)">*</span></label>
+        <input type="number" id="auth-absent" min="0" value="0"/>
       </div>
       <div class="form-group">
-        <label>Unauthorized Absent <span style="color:var(--danger)">*</span></label>
-        <input type="number" id="unauth-absent" min="0" value="0" placeholder="0"/>
+        <label>Unauthorized Absent <span style="color:var(--ruby)">*</span></label>
+        <input type="number" id="unauth-absent" min="0" value="0"/>
       </div>
     </div>
   </div>
 
-  <!-- SECTION 4 — ABSENT STUDENT NAMES -->
+  <!-- SECTION 4 — ABSENT NAMES -->
   <div class="card">
     <div class="card-title"><span class="icon">📋</span> Absent Student Names</div>
     <div class="form-row">
       <div class="form-group">
-        <label>Names of Authorized Absent Students</label>
-        <textarea id="auth-names" placeholder="Enter names separated by commas&#10;e.g. Fatima Ali, Ahmed Khan"></textarea>
+        <label>Authorized Absent Names</label>
+        <textarea id="auth-names" placeholder="Comma-separated names&#10;e.g. Fatima Ali, Ahmed Khan"></textarea>
       </div>
       <div class="form-group">
-        <label>Names of Unauthorized Absent Students</label>
-        <textarea id="unauth-names" placeholder="Enter names separated by commas&#10;e.g. Sara Malik, Bilal Ahmed"></textarea>
+        <label>Unauthorized Absent Names</label>
+        <textarea id="unauth-names" placeholder="Comma-separated names&#10;e.g. Sara Malik, Bilal Ahmed"></textarea>
       </div>
     </div>
   </div>
 
-  <!-- SECTION 5 — ATTENDANCE SUMMARY (auto-calculated) -->
+  <!-- SECTION 5 — SUMMARY -->
   <div class="card">
-    <div class="card-title"><span class="icon">📊</span> Attendance Summary <small style="font-weight:400;color:var(--text-muted);font-size:.82rem;">(Auto-calculated)</small></div>
+    <div class="card-title">
+      <span class="icon">📊</span> Attendance Summary
+      <small style="font-weight:400;color:var(--ink-soft);font-size:.8rem;margin-left:4px;">(Auto-calculated)</small>
+    </div>
     <div class="stats-row">
       <div class="stat-box green">
         <div class="num" id="calc-present">—</div>
@@ -167,30 +539,29 @@
       </div>
       <div class="stat-box gold">
         <div class="num" id="calc-auth">—</div>
-        <div class="lbl">Authorized Absent</div>
+        <div class="lbl">Auth Absent</div>
       </div>
       <div class="stat-box danger">
         <div class="num" id="calc-unauth">—</div>
-        <div class="lbl">Unauth. Absent</div>
+        <div class="lbl">Unauth Absent</div>
       </div>
       <div class="stat-box info">
         <div class="num" id="calc-total">—</div>
         <div class="lbl">Total Students</div>
       </div>
     </div>
-    <div style="margin-top:16px;">
-      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-        <span style="font-weight:600;color:var(--text-muted);font-size:.85rem;">Attendance Rate (Present + Authorized)</span>
-        <span id="calc-pct" style="font-weight:800;color:var(--green);font-size:1.1rem;">—%</span>
+    <div>
+      <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+        <span style="font-weight:700; font-size:.83rem; color:var(--ink-soft);">Attendance Rate (Present + Authorized)</span>
+        <span id="calc-pct" style="font-weight:800; color:var(--emerald); font-size:1.1rem;">—%</span>
       </div>
       <div class="progress-wrap">
         <div class="progress-fill" id="progress-bar" style="width:0%"></div>
       </div>
     </div>
-    <div style="margin-top:14px;padding:12px 16px;background:var(--surface);border-radius:var(--radius-sm);">
-      <span style="font-size:.82rem;color:var(--text-muted);">
-        ℹ️ <strong>Formula:</strong> Present = Total − Authorized Absent − Unauthorized Absent &nbsp;|&nbsp; Attendance % = (Present + Authorized Absent) ÷ Total × 100
-      </span>
+    <div class="formula-note">
+      ℹ️ <strong>Formula:</strong> Present = Total − Auth Absent − Unauth Absent &nbsp;|&nbsp;
+      Attendance % = (Present + Auth Absent) ÷ Total × 100
     </div>
   </div>
 
@@ -199,7 +570,7 @@
     <div class="card-title"><span class="icon">👩‍🏫</span> Class Teacher</div>
     <div class="form-row">
       <div class="form-group">
-        <label>Class Teacher Name <span style="color:var(--danger)">*</span></label>
+        <label>Class Teacher Name <span style="color:var(--ruby)">*</span></label>
         <input type="text" id="teacher-name" placeholder="Full Name" required/>
       </div>
     </div>
@@ -208,44 +579,39 @@
       <button class="btn btn-outline" onclick="clearForm()">🔄 Clear Form</button>
     </div>
   </div>
+
 </main>
 
 <script type="module">
-// ── Firebase imports ──────────────────────────────────────────────────────
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
-import {
-  getFirestore, collection, addDoc, Timestamp
-} from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, Timestamp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
 
-// ▶▶ REPLACE WITH YOUR FIREBASE CONFIG ◀◀
 const firebaseConfig = {
-    apiKey: "AIzaSyD3EputWhUMKuXTgYSXy5RUyPdL9xxgBl4",
-    authDomain: "pihss-attendance.firebaseapp.com",
-    projectId: "pihss-attendance",
-    storageBucket: "pihss-attendance.firebasestorage.app",
-    messagingSenderId: "1048675189447",
-    appId: "1:1048675189447:web:42ab613d641bbfa297f4e2"
-  };
-
+  apiKey: "AIzaSyD3EputWhUMKuXTgYSXy5RUyPdL9xxgBl4",
+  authDomain: "pihss-attendance.firebaseapp.com",
+  projectId: "pihss-attendance",
+  storageBucket: "pihss-attendance.firebasestorage.app",
+  messagingSenderId: "1048675189447",
+  appId: "1:1048675189447:web:42ab613d641bbfa297f4e2"
+};
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
 
-// ── Days array ────────────────────────────────────────────────────────────
 const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-
-// ── Set today's date ──────────────────────────────────────────────────────
 const dateEl = document.getElementById('date');
 dateEl.value = new Date().toISOString().split('T')[0];
+
+// Today display
+const now = new Date();
+document.getElementById('today-display').textContent =
+  now.toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+
 updateDay();
-
-// ── Event listeners ───────────────────────────────────────────────────────
 dateEl.addEventListener('change', updateDay);
-document.getElementById('grade')   .addEventListener('change', updateClassBadge);
-document.getElementById('section') .addEventListener('change', updateClassBadge);
-
+document.getElementById('grade').addEventListener('change', updateClassBadge);
+document.getElementById('section').addEventListener('change', updateClassBadge);
 ['total-students','auth-absent','unauth-absent'].forEach(id =>
-  document.getElementById(id).addEventListener('input', recalculate)
-);
+  document.getElementById(id).addEventListener('input', recalculate));
 
 function updateDay() {
   const d = new Date(dateEl.value + 'T00:00:00');
@@ -258,7 +624,7 @@ function updateClassBadge() {
   const preview = document.getElementById('class-preview');
   const badge   = document.getElementById('class-badge');
   if (g && s) {
-    badge.textContent = `Class: ${g}${s}`;
+    badge.textContent = `✅ Class: ${g}–${s} (${document.getElementById('cycle').value || 'No Cycle'})`;
     preview.style.display = 'block';
   } else {
     preview.style.display = 'none';
@@ -267,69 +633,69 @@ function updateClassBadge() {
 }
 
 function recalculate() {
-  const total  = parseInt(document.getElementById('total-students').value)  || 0;
-  const auth   = parseInt(document.getElementById('auth-absent').value)     || 0;
-  const unauth = parseInt(document.getElementById('unauth-absent').value)   || 0;
+  const total   = parseInt(document.getElementById('total-students').value) || 0;
+  const auth    = parseInt(document.getElementById('auth-absent').value)    || 0;
+  const unauth  = parseInt(document.getElementById('unauth-absent').value)  || 0;
   const present = Math.max(0, total - auth - unauth);
-  const pct     = total > 0 ? Math.round(((present + auth) / total) * 100) : 0;
+  const rate    = total > 0 ? Math.round(((present + auth) / total) * 100) : 0;
 
   document.getElementById('calc-present').textContent = present;
-  document.getElementById('calc-auth')   .textContent = auth;
-  document.getElementById('calc-unauth') .textContent = unauth;
-  document.getElementById('calc-total')  .textContent = total;
-  document.getElementById('calc-pct')    .textContent = pct + '%';
+  document.getElementById('calc-auth').textContent    = auth;
+  document.getElementById('calc-unauth').textContent  = unauth;
+  document.getElementById('calc-total').textContent   = total;
+  document.getElementById('calc-pct').textContent     = rate + '%';
 
   const bar = document.getElementById('progress-bar');
-  bar.style.width = pct + '%';
-  bar.className = 'progress-fill' + (pct < 70 ? ' low' : pct < 85 ? ' mid' : '');
+  bar.style.width = rate + '%';
+  bar.className = 'progress-fill' + (rate < 70 ? ' low' : rate < 85 ? ' mid' : '');
 }
 
-// ── Toast helper ──────────────────────────────────────────────────────────
+window.selectCycle = function(btn, cycle) {
+  document.querySelectorAll('.cycle-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('cycle').value = cycle;
+  updateClassBadge();
+};
+
 function toast(msg, type='success') {
   const c = document.getElementById('toast-container');
   const t = document.createElement('div');
-  t.className = `toast ${type}`;
-  t.textContent = msg;
-  c.appendChild(t);
+  t.className = `toast ${type}`; t.textContent = msg; c.appendChild(t);
   setTimeout(() => t.remove(), 3500);
 }
 
-// ── Submit ────────────────────────────────────────────────────────────────
 window.submitAttendance = async function() {
   const fields = ['date','cycle','grade','section','total-students','teacher-name'];
   for (const f of fields) {
     const el = document.getElementById(f);
     if (!el.value.trim()) {
-      toast(`Please fill in: ${el.labels?.[0]?.textContent || f}`, 'error');
+      toast(`⚠️ Please fill in: ${el.labels?.[0]?.textContent || f}`, 'error');
       el.focus();
       return;
     }
   }
 
-  const total   = parseInt(document.getElementById('total-students').value)  || 0;
-  const auth    = parseInt(document.getElementById('auth-absent').value)     || 0;
-  const unauth  = parseInt(document.getElementById('unauth-absent').value)   || 0;
+  const total   = parseInt(document.getElementById('total-students').value) || 0;
+  const auth    = parseInt(document.getElementById('auth-absent').value)    || 0;
+  const unauth  = parseInt(document.getElementById('unauth-absent').value)  || 0;
   const present = Math.max(0, total - auth - unauth);
-  const pct     = total > 0 ? Math.round(((present + auth) / total) * 100) : 0;
+  const rate    = total > 0 ? Math.round(((present + auth) / total) * 100) : 0;
   const grade   = document.getElementById('grade').value;
   const section = document.getElementById('section').value;
 
   const record = {
-    date:           document.getElementById('date').value,
-    day:            document.getElementById('day').value,
-    cycle:          document.getElementById('cycle').value,
-    grade,
-    section,
-    className:      `${grade}${section}`,
-    totalStudents:  total,
-    authorizedAbsent:   auth,
+    date: document.getElementById('date').value,
+    day:  document.getElementById('day').value,
+    cycle: document.getElementById('cycle').value,
+    grade, section, className: `${grade}${section}`,
+    totalStudents: total,
+    authorizedAbsent: auth,
     unauthorizedAbsent: unauth,
-    present,
-    attendancePct:  pct,
-    authNames:      document.getElementById('auth-names').value.trim(),
-    unauthNames:    document.getElementById('unauth-names').value.trim(),
-    teacherName:    document.getElementById('teacher-name').value.trim(),
-    submittedAt:    Timestamp.now()
+    present, attendancePct: rate,
+    authNames:   document.getElementById('auth-names').value.trim(),
+    unauthNames: document.getElementById('unauth-names').value.trim(),
+    teacherName: document.getElementById('teacher-name').value.trim(),
+    submittedAt: Timestamp.now()
   };
 
   document.getElementById('spinner').style.display = 'flex';
@@ -337,7 +703,7 @@ window.submitAttendance = async function() {
     await addDoc(collection(db, 'attendance'), record);
     toast('✅ Attendance submitted successfully!', 'success');
     clearForm();
-  } catch (err) {
+  } catch(err) {
     toast('❌ Error: ' + err.message, 'error');
   } finally {
     document.getElementById('spinner').style.display = 'none';
@@ -345,20 +711,19 @@ window.submitAttendance = async function() {
 };
 
 window.clearForm = function() {
-  ['date','cycle','grade','section','total-students','auth-absent',
-   'unauth-absent','auth-names','unauth-names','teacher-name'].forEach(id => {
+  ['date','grade','section','total-students','auth-absent','unauth-absent','auth-names','unauth-names','teacher-name'].forEach(id => {
     const el = document.getElementById(id);
     if (el.tagName === 'SELECT') el.selectedIndex = 0;
-    else if (id === 'auth-absent' || id === 'unauth-absent') el.value = 0;
-    else el.value = '';
+    else if (['auth-absent','unauth-absent'].includes(id)) el.value = 0;
+    else if (id !== 'date') el.value = '';
   });
+  document.getElementById('cycle').value = '';
+  document.querySelectorAll('.cycle-tab').forEach(t => t.classList.remove('active'));
   dateEl.value = new Date().toISOString().split('T')[0];
-  updateDay();
-  recalculate();
+  updateDay(); recalculate();
   document.getElementById('class-preview').style.display = 'none';
 };
 
-// Initial calc
 recalculate();
 </script>
 </body>
