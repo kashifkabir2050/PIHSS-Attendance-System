@@ -701,6 +701,8 @@ tbody td { padding: 10px 13px; }
 
 <script>
 // Login must be in a plain script so onclick="doLogin()" can find it
+window._loginPending = false;
+
 function doLogin() {
   const u   = document.getElementById('login-user').value.trim();
   const p   = document.getElementById('login-pass').value;
@@ -708,7 +710,12 @@ function doLogin() {
   if (u === 'admin' && p === 'pihss2024') {
     document.getElementById('login-overlay').style.display = 'none';
     err.textContent = '';
-    if (typeof window._loadAll === 'function') window._loadAll();
+    // Try immediately, or set a flag so the module picks it up on load
+    if (typeof window._loadAll === 'function') {
+      window._loadAll();
+    } else {
+      window._loginPending = true;
+    }
   } else {
     err.textContent = '⚠️ Invalid username or password.';
     document.getElementById('login-pass').value = '';
@@ -718,9 +725,9 @@ function doLogin() {
 </script>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, collection, getDocs, deleteDoc, doc, orderBy, query }
-  from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD3EputWhUMKuXTgYSXy5RUyPdL9xxgBl4",
@@ -799,7 +806,7 @@ window.switchTab = function(name, btn) {
 };
 
 // ── Load all from Firestore ───────────────────────────────────────
-window._loadAll = window.loadAll = async function() {
+window.loadAll = async function() {
   spin(true);
   try {
     const q    = query(collection(db,'attendance'), orderBy('date','desc'));
@@ -1309,6 +1316,18 @@ document.getElementById('f-absent-from').value = agoStr;
 document.getElementById('f-absent-to').value   = todayStr;
 document.getElementById('f-rec-from').value    = agoStr;
 document.getElementById('f-rec-to').value      = todayStr;
+
+// Add Enter key support for login
+document.getElementById('login-user').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+// Register loadAll globally so login script can call it
+window._loadAll = window.loadAll;
+
+// If login was completed before this module finished loading, auto-load now
+if (window._loginPending) {
+  window._loginPending = false;
+  window._loadAll();
+}
 
 </script>
 </body>
