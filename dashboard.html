@@ -700,9 +700,7 @@ tbody td { padding: 10px 13px; }
 </main>
 
 <script>
-// Login — plain script so onclick="doLogin()" works globally
-window.__pihssLoginPending = false;
-
+// Login must be in a plain script so onclick="doLogin()" can find it
 function doLogin() {
   const u   = document.getElementById('login-user').value.trim();
   const p   = document.getElementById('login-pass').value;
@@ -710,13 +708,7 @@ function doLogin() {
   if (u === 'admin' && p === 'pihss2024') {
     document.getElementById('login-overlay').style.display = 'none';
     err.textContent = '';
-    // If the module has already set window.loadAll, call it now.
-    // Otherwise set a flag; the module checks it on DOMContentLoaded.
-    if (typeof window.loadAll === 'function') {
-      window.loadAll();
-    } else {
-      window.__pihssLoginPending = true;
-    }
+    if (typeof window._loadAll === 'function') window._loadAll();
   } else {
     err.textContent = '⚠️ Invalid username or password.';
     document.getElementById('login-pass').value = '';
@@ -726,9 +718,9 @@ function doLogin() {
 </script>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, getDocs, deleteDoc, doc }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+import { getFirestore, collection, getDocs, deleteDoc, doc, orderBy, query }
+  from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD3EputWhUMKuXTgYSXy5RUyPdL9xxgBl4",
@@ -807,27 +799,17 @@ window.switchTab = function(name, btn) {
 };
 
 // ── Load all from Firestore ───────────────────────────────────────
-window.loadAll = async function() {
+window._loadAll = window.loadAll = async function() {
   spin(true);
   try {
-    // No orderBy here — avoids the Firestore composite index requirement.
-    // We sort in JS after fetching.
-    const snap = await getDocs(collection(db,'attendance'));
-    ALL_RECORDS = snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .sort((a,b) => (b.date||'').localeCompare(a.date||''));
+    const q    = query(collection(db,'attendance'), orderBy('date','desc'));
+    const snap = await getDocs(q);
+    ALL_RECORDS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     populateGradeFilters();
-    // Auto-pick the most recent date that has data so the daily tab isn't empty
-    if (ALL_RECORDS.length) {
-      const latestDate = ALL_RECORDS[0].date;
-      const dateEl = document.getElementById('f-date');
-      if (dateEl) dateEl.value = latestDate;
-    }
     renderDaily();
     toast(`✅ Loaded ${ALL_RECORDS.length} records`, 'success');
   } catch(err) {
     toast('❌ Firebase error: ' + err.message, 'error');
-    console.error('Firebase loadAll error:', err);
   } finally { spin(false); }
 };
 
@@ -1311,6 +1293,8 @@ window.downloadRecordsPDF = function() {
   toast('✅ All Records PDF downloaded!','success');
 };
 
+// ── LOGIN — handled by plain <script> block above ─────────────────
+
 // ── Init ──────────────────────────────────────────────────────────
 const todayStr = new Date().toISOString().split('T')[0];
 document.getElementById('f-date').value = todayStr;
@@ -1325,17 +1309,6 @@ document.getElementById('f-absent-from').value = agoStr;
 document.getElementById('f-absent-to').value   = todayStr;
 document.getElementById('f-rec-from').value    = agoStr;
 document.getElementById('f-rec-to').value      = todayStr;
-
-// Add Enter key support for login
-document.getElementById('login-user').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
-
-// At this point window.loadAll is defined (we're at the bottom of the module).
-// If the user already clicked login before the module finished loading,
-// the flag will be true — fire loadAll now.
-if (window.__pihssLoginPending) {
-  window.__pihssLoginPending = false;
-  window.loadAll();
-}
 
 </script>
 </body>
