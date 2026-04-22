@@ -475,7 +475,6 @@ tbody td { padding: 10px 13px; }
       <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="renderDaily()">🔍 Filter</button>
       <button class="btn btn-gold btn-sm" style="align-self:flex-end" onclick="downloadDailyPDF()">📥 Download PDF</button>
     </div>
-
     <div class="stats-row" id="daily-stats"></div>
 
     <div class="dash-grid">
@@ -700,6 +699,24 @@ tbody td { padding: 10px 13px; }
 
 </main>
 
+<script>
+// Login must be in a plain script so onclick="doLogin()" can find it
+function doLogin() {
+  const u   = document.getElementById('login-user').value.trim();
+  const p   = document.getElementById('login-pass').value;
+  const err = document.getElementById('login-error');
+  if (u === 'admin' && p === 'pihss2024') {
+    document.getElementById('login-overlay').style.display = 'none';
+    err.textContent = '';
+    if (typeof window._loadAll === 'function') window._loadAll();
+  } else {
+    err.textContent = '⚠️ Invalid username or password.';
+    document.getElementById('login-pass').value = '';
+    document.getElementById('login-pass').focus();
+  }
+}
+</script>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
 import { getFirestore, collection, getDocs, deleteDoc, doc, orderBy, query }
@@ -782,7 +799,7 @@ window.switchTab = function(name, btn) {
 };
 
 // ── Load all from Firestore ───────────────────────────────────────
-window.loadAll = async function() {
+window._loadAll = window.loadAll = async function() {
   spin(true);
   try {
     const q    = query(collection(db,'attendance'), orderBy('date','desc'));
@@ -1129,13 +1146,11 @@ function pdfHeader(pdoc, title, subtitle, color) {
   pdoc.setFontSize(10); pdoc.setFont('helvetica','normal');
   pdoc.text(`${title}  |  ${subtitle}`,148.5,18,{align:'center'});
 }
-
 function pdfSummaryRow(pdoc, items, y, color) {
   pdoc.setTextColor(...color); pdoc.setFontSize(9); pdoc.setFont('helvetica','bold');
   pdoc.text(items.join('   |   '), 148.5, y, {align:'center'});
 }
 
-// ── DAILY PDF ─────────────────────────────────────────────────────
 window.downloadDailyPDF = function() {
   const { jsPDF } = window.jspdf;
   const pdoc = new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
@@ -1144,308 +1159,141 @@ window.downloadDailyPDF = function() {
   const grade = document.getElementById('f-grade-daily').value;
   let recs = filterByCycle(ALL_RECORDS).filter(r => r.date === date);
   if (grade) recs = recs.filter(r => r.grade === grade);
-
   const generated = today.toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-  pdfHeader(pdoc, `Daily Attendance Report — ${date}`, `Generated: ${generated}`, [6,78,59]);
-
-  const totP=recs.reduce((s,r)=>s+(r.present||0),0), totA=recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
-  const totU=recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0), totT=recs.reduce((s,r)=>s+(r.totalStudents||0),0);
+  pdfHeader(pdoc,`Daily Attendance Report — ${date}`,`Generated: ${generated}`,[6,78,59]);
+  const totP=recs.reduce((s,r)=>s+(r.present||0),0),totA=recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
+  const totU=recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0),totT=recs.reduce((s,r)=>s+(r.totalStudents||0),0);
   const avgPct=recs.length?Math.round(recs.reduce((s,r)=>s+(r.attendancePct||0),0)/recs.length):0;
-  pdfSummaryRow(pdoc,[`Total: ${totT}`,`Present: ${totP}`,`Auth Absent: ${totA}`,`Unauth Absent: ${totU}`,`Avg Attendance: ${avgPct}%`,`Classes: ${recs.length}`], 34, [6,78,59]);
-
-  pdoc.autoTable({
-    startY:40,
-    head:[['Class','Grade','Section','Cycle','Total','Present','Auth Absent','Unauth Absent','Attendance %','Class Teacher']],
-    body: recs.length ? recs.map(r=>[r.className,r.grade,r.section||'',r.cycle,r.totalStudents,r.present,r.authorizedAbsent,r.unauthorizedAbsent,(r.attendancePct||0)+'%',r.teacherName])
-                      : [['—','—','—','—','—','—','—','—','—',`No data for ${date}`]],
-    styles:{fontSize:8,cellPadding:2.5},
-    headStyles:{fillColor:[6,78,59],textColor:[255,255,255],fontStyle:'bold'},
-    alternateRowStyles:{fillColor:[240,253,244]},
-    columnStyles:{8:{halign:'center'}}
-  });
-
-  // Page 2: Absent students
+  pdfSummaryRow(pdoc,[`Total: ${totT}`,`Present: ${totP}`,`Auth Absent: ${totA}`,`Unauth Absent: ${totU}`,`Avg Attendance: ${avgPct}%`,`Classes: ${recs.length}`],34,[6,78,59]);
+  pdoc.autoTable({startY:40,head:[['Class','Grade','Section','Cycle','Total','Present','Auth Absent','Unauth Absent','Attendance %','Class Teacher']],body:recs.length?recs.map(r=>[r.className,r.grade,r.section||'',r.cycle,r.totalStudents,r.present,r.authorizedAbsent,r.unauthorizedAbsent,(r.attendancePct||0)+'%',r.teacherName]):[['—','—','—','—','—','—','—','—','—',`No data for ${date}`]],styles:{fontSize:8,cellPadding:2.5},headStyles:{fillColor:[6,78,59],textColor:[255,255,255],fontStyle:'bold'},alternateRowStyles:{fillColor:[240,253,244]},columnStyles:{8:{halign:'center'}}});
   pdoc.addPage();
-  pdfHeader(pdoc, `Daily Absent Register — ${date}`, `Generated: ${generated}`, [220,38,38]);
+  pdfHeader(pdoc,`Daily Absent Register — ${date}`,`Generated: ${generated}`,[220,38,38]);
   const abRows=[];
-  recs.forEach(r=>{
-    (r.authNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>abRows.push([r.date,r.className,r.grade,n,'Authorized',r.teacherName]));
-    (r.unauthNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>abRows.push([r.date,r.className,r.grade,n,'Unauthorized',r.teacherName]));
-  });
-  pdoc.autoTable({
-    startY:32,
-    head:[['Date','Class','Grade','Student Name','Type','Class Teacher']],
-    body: abRows.length ? abRows : [['—','—','—','No absent students recorded','—','—']],
-    styles:{fontSize:9,cellPadding:2.5},
-    headStyles:{fillColor:[220,38,38],textColor:[255,255,255],fontStyle:'bold'},
-    alternateRowStyles:{fillColor:[254,242,242]}
-  });
-
+  recs.forEach(r=>{(r.authNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>abRows.push([r.date,r.className,r.grade,n,'Authorized',r.teacherName]));(r.unauthNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>abRows.push([r.date,r.className,r.grade,n,'Unauthorized',r.teacherName]));});
+  pdoc.autoTable({startY:32,head:[['Date','Class','Grade','Student Name','Type','Class Teacher']],body:abRows.length?abRows:[['—','—','—','No absent students recorded','—','—']],styles:{fontSize:9,cellPadding:2.5},headStyles:{fillColor:[220,38,38],textColor:[255,255,255],fontStyle:'bold'},alternateRowStyles:{fillColor:[254,242,242]}});
   pdoc.save(`PIHSS_Daily_Report_${date}.pdf`);
   toast('✅ Daily PDF downloaded!','success');
 };
 
-// ── WEEKLY PDF ────────────────────────────────────────────────────
 window.downloadWeeklyPDF = function() {
   const { jsPDF } = window.jspdf;
   const pdoc = new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
   const today = new Date();
   const generated = today.toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-
   const weekStart = document.getElementById('f-week-start').value;
   if (!weekStart) { toast('⚠️ Please select a week start date.','error'); return; }
   const mon = new Date(weekStart+'T00:00:00');
   const weekDays = Array.from({length:5},(_,i)=>{ const d=new Date(mon); d.setDate(d.getDate()+i); return d.toISOString().split('T')[0]; });
   const weekLabel = `${weekDays[0]} to ${weekDays[4]}`;
-
-  pdfHeader(pdoc, `Weekly Attendance Report — ${weekLabel}`, `Generated: ${generated}`, [37,99,235]);
-
+  pdfHeader(pdoc,`Weekly Attendance Report — ${weekLabel}`,`Generated: ${generated}`,[37,99,235]);
   let baseRecs = filterByCycle(ALL_RECORDS).filter(r=>weekDays.includes(r.date));
   const classMap={};
-  baseRecs.forEach(r=>{
-    if(!classMap[r.className]) classMap[r.className]={className:r.className,grade:r.grade,section:r.section||'',cycle:r.cycle,days:0,totP:0,totA:0,totU:0,totPct:0,teacher:r.teacherName};
-    const c=classMap[r.className]; c.days++; c.totP+=r.present||0; c.totA+=r.authorizedAbsent||0; c.totU+=r.unauthorizedAbsent||0; c.totPct+=r.attendancePct||0;
-  });
+  baseRecs.forEach(r=>{ if(!classMap[r.className]) classMap[r.className]={className:r.className,grade:r.grade,section:r.section||'',cycle:r.cycle,days:0,totP:0,totA:0,totU:0,totPct:0,teacher:r.teacherName}; const c=classMap[r.className]; c.days++;c.totP+=r.present||0;c.totA+=r.authorizedAbsent||0;c.totU+=r.unauthorizedAbsent||0;c.totPct+=r.attendancePct||0; });
   const rows=Object.values(classMap);
-
   const totDays=weekDays.filter(d=>baseRecs.some(r=>r.date===d)).length;
-  const totP=rows.reduce((s,c)=>s+c.totP,0), totA=rows.reduce((s,c)=>s+c.totA,0), totU=rows.reduce((s,c)=>s+c.totU,0);
+  const totP=rows.reduce((s,c)=>s+c.totP,0),totA=rows.reduce((s,c)=>s+c.totA,0),totU=rows.reduce((s,c)=>s+c.totU,0);
   const avgPct=rows.length?Math.round(rows.reduce((s,c)=>s+c.totPct,0)/rows.reduce((s,c)=>s+c.days,0)):0;
   pdfSummaryRow(pdoc,[`School Days: ${totDays}`,`Total Present: ${totP}`,`Auth Absent: ${totA}`,`Unauth Absent: ${totU}`,`Avg Attendance: ${avgPct}%`],34,[37,99,235]);
-
-  pdoc.autoTable({
-    startY:40,
-    head:[['Class','Grade','Section','Cycle','Days Submitted','Avg Present','Avg Auth Absent','Avg Unauth Absent','Avg Attendance %','Class Teacher']],
-    body: rows.length ? rows.map(c=>[c.className,c.grade,c.section,c.cycle,c.days,Math.round(c.totP/c.days),Math.round(c.totA/c.days),Math.round(c.totU/c.days),Math.round(c.totPct/c.days)+'%',c.teacher])
-                      : [['—','—','—','—','—','—','—','—','—',`No data for this week`]],
-    styles:{fontSize:8,cellPadding:2.5},
-    headStyles:{fillColor:[37,99,235],textColor:[255,255,255],fontStyle:'bold'},
-    alternateRowStyles:{fillColor:[239,246,255]},
-    columnStyles:{8:{halign:'center'}}
-  });
-
-  // Day-by-day breakdown
+  pdoc.autoTable({startY:40,head:[['Class','Grade','Section','Cycle','Days','Avg Present','Avg Auth Absent','Avg Unauth Absent','Avg Attendance %','Class Teacher']],body:rows.length?rows.map(c=>[c.className,c.grade,c.section,c.cycle,c.days,Math.round(c.totP/c.days),Math.round(c.totA/c.days),Math.round(c.totU/c.days),Math.round(c.totPct/c.days)+'%',c.teacher]):[['—','—','—','—','—','—','—','—','—','No data for this week']],styles:{fontSize:8,cellPadding:2.5},headStyles:{fillColor:[37,99,235],textColor:[255,255,255],fontStyle:'bold'},alternateRowStyles:{fillColor:[239,246,255]},columnStyles:{8:{halign:'center'}}});
   pdoc.addPage();
-  pdfHeader(pdoc, `Weekly Day-by-Day Breakdown — ${weekLabel}`, `Generated: ${generated}`, [37,99,235]);
-  pdoc.autoTable({
-    startY:32,
-    head:[['Date','Day','Class','Grade','Cycle','Total','Present','Auth Absent','Unauth Absent','Attendance %','Teacher']],
-    body: baseRecs.length ? baseRecs.map(r=>[r.date,r.day||new Date(r.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'}),r.className,r.grade,r.cycle,r.totalStudents,r.present,r.authorizedAbsent,r.unauthorizedAbsent,(r.attendancePct||0)+'%',r.teacherName])
-                          : [['—','—','—','—','—','—','—','—','—','—','No data for this week']],
-    styles:{fontSize:7.5,cellPadding:2},
-    headStyles:{fillColor:[37,99,235],textColor:[255,255,255],fontStyle:'bold'},
-    alternateRowStyles:{fillColor:[239,246,255]},
-    columnStyles:{9:{halign:'center'}}
-  });
-
+  pdfHeader(pdoc,`Weekly Day-by-Day Breakdown — ${weekLabel}`,`Generated: ${generated}`,[37,99,235]);
+  pdoc.autoTable({startY:32,head:[['Date','Day','Class','Grade','Cycle','Total','Present','Auth Absent','Unauth Absent','Attendance %','Teacher']],body:baseRecs.length?baseRecs.map(r=>[r.date,r.day||'',r.className,r.grade,r.cycle,r.totalStudents,r.present,r.authorizedAbsent,r.unauthorizedAbsent,(r.attendancePct||0)+'%',r.teacherName]):[['—','—','—','—','—','—','—','—','—','—','No data']],styles:{fontSize:7.5,cellPadding:2},headStyles:{fillColor:[37,99,235],textColor:[255,255,255],fontStyle:'bold'},alternateRowStyles:{fillColor:[239,246,255]},columnStyles:{9:{halign:'center'}}});
   pdoc.save(`PIHSS_Weekly_Report_${weekDays[0]}.pdf`);
   toast('✅ Weekly PDF downloaded!','success');
 };
 
-// ── MONTHLY PDF ───────────────────────────────────────────────────
 window.downloadMonthlyPDF = function() {
   const { jsPDF } = window.jspdf;
   const pdoc = new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
   const today = new Date();
   const generated = today.toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-
   const monthVal = document.getElementById('f-month').value;
   if (!monthVal) { toast('⚠️ Please select a month.','error'); return; }
   const monthLabel = new Date(monthVal+'-01').toLocaleDateString('en-GB',{year:'numeric',month:'long'});
-
-  pdfHeader(pdoc, `Monthly Attendance Report — ${monthLabel}`, `Generated: ${generated}`, [217,119,6]);
-
-  let baseRecs = filterByCycle(ALL_RECORDS).filter(r => r.date && r.date.startsWith(monthVal));
+  pdfHeader(pdoc,`Monthly Attendance Report — ${monthLabel}`,`Generated: ${generated}`,[217,119,6]);
+  let baseRecs = filterByCycle(ALL_RECORDS).filter(r=>r.date&&r.date.startsWith(monthVal));
   const classMap={};
-  baseRecs.forEach(r=>{
-    if(!classMap[r.className]) classMap[r.className]={className:r.className,grade:r.grade,section:r.section||'',cycle:r.cycle,days:0,totP:0,totA:0,totU:0,totPct:0,teacher:r.teacherName};
-    const c=classMap[r.className]; c.days++; c.totP+=r.present||0; c.totA+=r.authorizedAbsent||0; c.totU+=r.unauthorizedAbsent||0; c.totPct+=r.attendancePct||0;
-  });
+  baseRecs.forEach(r=>{ if(!classMap[r.className]) classMap[r.className]={className:r.className,grade:r.grade,section:r.section||'',cycle:r.cycle,days:0,totP:0,totA:0,totU:0,totPct:0,teacher:r.teacherName}; const c=classMap[r.className]; c.days++;c.totP+=r.present||0;c.totA+=r.authorizedAbsent||0;c.totU+=r.unauthorizedAbsent||0;c.totPct+=r.attendancePct||0; });
   const rows=Object.values(classMap);
-
   const schoolDays=[...new Set(baseRecs.map(r=>r.date))].length;
-  const totP=rows.reduce((s,c)=>s+c.totP,0), totA=rows.reduce((s,c)=>s+c.totA,0), totU=rows.reduce((s,c)=>s+c.totU,0);
+  const totP=rows.reduce((s,c)=>s+c.totP,0),totA=rows.reduce((s,c)=>s+c.totA,0),totU=rows.reduce((s,c)=>s+c.totU,0);
   const avgPct=rows.length?Math.round(rows.reduce((s,c)=>s+c.totPct,0)/rows.reduce((s,c)=>s+c.days,0)):0;
   pdfSummaryRow(pdoc,[`School Days: ${schoolDays}`,`Total Present: ${totP}`,`Total Auth Absent: ${totA}`,`Total Unauth Absent: ${totU}`,`Avg Attendance: ${avgPct}%`],34,[217,119,6]);
-
-  pdoc.autoTable({
-    startY:40,
-    head:[['Class','Grade','Section','Cycle','School Days','Avg Present','Total Auth Absent','Total Unauth Absent','Avg Attendance %','Class Teacher']],
-    body: rows.length ? rows.map(c=>[c.className,c.grade,c.section,c.cycle,c.days,Math.round(c.totP/c.days),c.totA,c.totU,Math.round(c.totPct/c.days)+'%',c.teacher])
-                      : [['—','—','—','—','—','—','—','—','—',`No data for ${monthLabel}`]],
-    styles:{fontSize:8,cellPadding:2.5},
-    headStyles:{fillColor:[180,83,9],textColor:[255,255,255],fontStyle:'bold'},
-    alternateRowStyles:{fillColor:[255,251,235]},
-    columnStyles:{8:{halign:'center'}}
-  });
-
-  // Monthly absent register
+  pdoc.autoTable({startY:40,head:[['Class','Grade','Section','Cycle','School Days','Avg Present','Total Auth Absent','Total Unauth Absent','Avg Attendance %','Class Teacher']],body:rows.length?rows.map(c=>[c.className,c.grade,c.section,c.cycle,c.days,Math.round(c.totP/c.days),c.totA,c.totU,Math.round(c.totPct/c.days)+'%',c.teacher]):[['—','—','—','—','—','—','—','—','—',`No data for ${monthLabel}`]],styles:{fontSize:8,cellPadding:2.5},headStyles:{fillColor:[180,83,9],textColor:[255,255,255],fontStyle:'bold'},alternateRowStyles:{fillColor:[255,251,235]},columnStyles:{8:{halign:'center'}}});
   pdoc.addPage();
-  pdfHeader(pdoc, `Monthly Absent Register — ${monthLabel}`, `Generated: ${generated}`, [220,38,38]);
+  pdfHeader(pdoc,`Monthly Absent Register — ${monthLabel}`,`Generated: ${generated}`,[220,38,38]);
   const abRows=[];
-  baseRecs.forEach(r=>{
-    (r.authNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>abRows.push([r.date,r.className,r.grade,n,'Authorized',r.teacherName]));
-    (r.unauthNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>abRows.push([r.date,r.className,r.grade,n,'Unauthorized',r.teacherName]));
-  });
+  baseRecs.forEach(r=>{ (r.authNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>abRows.push([r.date,r.className,r.grade,n,'Authorized',r.teacherName])); (r.unauthNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>abRows.push([r.date,r.className,r.grade,n,'Unauthorized',r.teacherName])); });
   abRows.sort((a,b)=>b[0].localeCompare(a[0]));
-  pdoc.autoTable({
-    startY:32,
-    head:[['Date','Class','Grade','Student Name','Type','Class Teacher']],
-    body: abRows.length ? abRows : [['—','—','—','No absent records for this month','—','—']],
-    styles:{fontSize:8,cellPadding:2},
-    headStyles:{fillColor:[220,38,38],textColor:[255,255,255],fontStyle:'bold'},
-    alternateRowStyles:{fillColor:[254,242,242]}
-  });
-
+  pdoc.autoTable({startY:32,head:[['Date','Class','Grade','Student Name','Type','Class Teacher']],body:abRows.length?abRows:[['—','—','—','No absent records for this month','—','—']],styles:{fontSize:8,cellPadding:2},headStyles:{fillColor:[220,38,38],textColor:[255,255,255],fontStyle:'bold'},alternateRowStyles:{fillColor:[254,242,242]}});
   pdoc.save(`PIHSS_Monthly_Report_${monthVal}.pdf`);
   toast('✅ Monthly PDF downloaded!','success');
 };
 
-// ── STUDENT RECORD PDF ────────────────────────────────────────────
 window.downloadStudentPDF = function() {
   const { jsPDF } = window.jspdf;
   const name = (document.getElementById('student-search').value||'').trim();
   if (!name) { toast('⚠️ Please enter a student name first.','error'); return; }
-
   const pdoc = new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
   const today = new Date();
   const generated = today.toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   const typeFilter = document.getElementById('student-type').value;
-
-  pdfHeader(pdoc, `Student Absence Record — ${name}`, `Generated: ${generated}`, [5,150,105]);
-
-  const q = name.toLowerCase();
-  const hits=[];
+  pdfHeader(pdoc,`Student Absence Record — ${name}`,`Generated: ${generated}`,[5,150,105]);
+  const q=name.toLowerCase(), hits=[];
   filterByCycle(ALL_RECORDS).forEach(r=>{
-    if((!typeFilter||typeFilter==='authorized') && r.authNames)
-      r.authNames.split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>{ if(n.toLowerCase().includes(q)) hits.push({date:r.date,class:r.className,grade:r.grade,cycle:r.cycle,name:n,type:'Authorized',teacher:r.teacherName}); });
-    if((!typeFilter||typeFilter==='unauthorized') && r.unauthNames)
-      r.unauthNames.split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>{ if(n.toLowerCase().includes(q)) hits.push({date:r.date,class:r.className,grade:r.grade,cycle:r.cycle,name:n,type:'Unauthorized',teacher:r.teacherName}); });
+    if((!typeFilter||typeFilter==='authorized')&&r.authNames) r.authNames.split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>{if(n.toLowerCase().includes(q)) hits.push([r.date,r.className,r.grade,r.cycle,n,'Authorized',r.teacherName]);});
+    if((!typeFilter||typeFilter==='unauthorized')&&r.unauthNames) r.unauthNames.split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>{if(n.toLowerCase().includes(q)) hits.push([r.date,r.className,r.grade,r.cycle,n,'Unauthorized',r.teacherName]);});
   });
-  hits.sort((a,b)=>b.date.localeCompare(a.date));
-
-  const auth=hits.filter(h=>h.type==='Authorized').length, unauth=hits.filter(h=>h.type==='Unauthorized').length;
+  hits.sort((a,b)=>b[0].localeCompare(a[0]));
+  const auth=hits.filter(h=>h[5]==='Authorized').length, unauth=hits.filter(h=>h[5]==='Unauthorized').length;
   pdfSummaryRow(pdoc,[`Total Absences: ${hits.length}`,`Authorized: ${auth}`,`Unauthorized: ${unauth}`],34,[5,150,105]);
-
-  pdoc.autoTable({
-    startY:40,
-    head:[['Date','Class','Grade','Cycle','Student Name','Absence Type','Class Teacher']],
-    body: hits.length ? hits.map(h=>[h.date,h.class,h.grade,h.cycle,h.name,h.type,h.teacher])
-                      : [['—','—','—','—',`No records found for "${name}"','—','—']],
-    styles:{fontSize:9,cellPadding:2.5},
-    headStyles:{fillColor:[6,78,59],textColor:[255,255,255],fontStyle:'bold'},
-    alternateRowStyles:{fillColor:[240,253,244]},
-    columnStyles:{5:{halign:'center'}}
-  });
-
-  const safeName = name.replace(/[^a-zA-Z0-9_]/g,'_');
-  pdoc.save(`PIHSS_Student_Record_${safeName}.pdf`);
+  pdoc.autoTable({startY:40,head:[['Date','Class','Grade','Cycle','Student Name','Absence Type','Class Teacher']],body:hits.length?hits:[['—','—','—','—',`No records found for "${name}",'—','—']],styles:{fontSize:9,cellPadding:2.5},headStyles:{fillColor:[6,78,59],textColor:[255,255,255],fontStyle:'bold'},alternateRowStyles:{fillColor:[240,253,244]},columnStyles:{5:{halign:'center'}}});
+  pdoc.save(`PIHSS_Student_${name.replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
   toast('✅ Student Record PDF downloaded!','success');
 };
 
-// ── ABSENT REGISTER PDF ───────────────────────────────────────────
 window.downloadAbsentPDF = function() {
   const { jsPDF } = window.jspdf;
   const pdoc = new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
   const today = new Date();
   const generated = today.toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-
-  const from  = document.getElementById('f-absent-from').value;
-  const to    = document.getElementById('f-absent-to').value;
-  const type  = document.getElementById('f-absent-type').value;
-  const grade = document.getElementById('f-absent-grade').value;
-
-  let recs = filterByCycle(ALL_RECORDS);
-  if (from) recs=recs.filter(r=>r.date>=from);
-  if (to)   recs=recs.filter(r=>r.date<=to);
-  if (grade)recs=recs.filter(r=>r.grade===grade);
-
+  const from=document.getElementById('f-absent-from').value, to=document.getElementById('f-absent-to').value;
+  const type=document.getElementById('f-absent-type').value, grade=document.getElementById('f-absent-grade').value;
+  let recs=filterByCycle(ALL_RECORDS);
+  if(from) recs=recs.filter(r=>r.date>=from); if(to) recs=recs.filter(r=>r.date<=to); if(grade) recs=recs.filter(r=>r.grade===grade);
   const rows=[];
-  recs.forEach(r=>{
-    if((!type||type==='authorized')   && r.authNames)   r.authNames.split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>rows.push([r.date,r.className,r.grade,r.cycle,n,'Authorized',r.teacherName]));
-    if((!type||type==='unauthorized') && r.unauthNames) r.unauthNames.split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>rows.push([r.date,r.className,r.grade,r.cycle,n,'Unauthorized',r.teacherName]));
-  });
+  recs.forEach(r=>{ if((!type||type==='authorized')&&r.authNames) r.authNames.split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>rows.push([r.date,r.className,r.grade,r.cycle,n,'Authorized',r.teacherName])); if((!type||type==='unauthorized')&&r.unauthNames) r.unauthNames.split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>rows.push([r.date,r.className,r.grade,r.cycle,n,'Unauthorized',r.teacherName])); });
   rows.sort((a,b)=>b[0].localeCompare(a[0]));
-
-  const periodLabel = (from&&to) ? `${from} to ${to}` : from ? `From ${from}` : to ? `Up to ${to}` : 'All Dates';
-  pdfHeader(pdoc, `Absent Student Register — ${periodLabel}`, `Generated: ${generated}`, [220,38,38]);
-
+  const periodLabel=(from&&to)?`${from} to ${to}`:from?`From ${from}`:to?`Up to ${to}`:'All Dates';
+  pdfHeader(pdoc,`Absent Student Register — ${periodLabel}`,`Generated: ${generated}`,[220,38,38]);
   const auth=rows.filter(r=>r[5]==='Authorized').length, unauth=rows.filter(r=>r[5]==='Unauthorized').length;
-  pdfSummaryRow(pdoc,[`Total Entries: ${rows.length}`,`Authorized: ${auth}`,`Unauthorized: ${unauth}`,grade?`Grade: ${grade}`:'All Grades',type?`Type: ${type}`:'All Types'],34,[220,38,38]);
-
-  pdoc.autoTable({
-    startY:40,
-    head:[['Date','Class','Grade','Cycle','Student Name','Absence Type','Class Teacher']],
-    body: rows.length ? rows : [['—','—','—','—','No absent records found','—','—']],
-    styles:{fontSize:8.5,cellPadding:2.5},
-    headStyles:{fillColor:[220,38,38],textColor:[255,255,255],fontStyle:'bold'},
-    alternateRowStyles:{fillColor:[254,242,242]},
-    columnStyles:{5:{halign:'center'}}
-  });
-
+  pdfSummaryRow(pdoc,[`Total Entries: ${rows.length}`,`Authorized: ${auth}`,`Unauthorized: ${unauth}`,grade?`Grade: ${grade}`:'All Grades'],34,[220,38,38]);
+  pdoc.autoTable({startY:40,head:[['Date','Class','Grade','Cycle','Student Name','Absence Type','Class Teacher']],body:rows.length?rows:[['—','—','—','—','No absent records found','—','—']],styles:{fontSize:8.5,cellPadding:2.5},headStyles:{fillColor:[220,38,38],textColor:[255,255,255],fontStyle:'bold'},alternateRowStyles:{fillColor:[254,242,242]},columnStyles:{5:{halign:'center'}}});
   pdoc.save(`PIHSS_Absent_Register_${from||'all'}_to_${to||'all'}.pdf`);
   toast('✅ Absent Register PDF downloaded!','success');
 };
 
-// ── ALL RECORDS PDF ───────────────────────────────────────────────
 window.downloadRecordsPDF = function() {
   const { jsPDF } = window.jspdf;
   const pdoc = new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
   const today = new Date();
   const generated = today.toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-
-  const from  = document.getElementById('f-rec-from').value;
-  const to    = document.getElementById('f-rec-to').value;
-  const cycle = document.getElementById('f-rec-cycle').value;
-  const grade = document.getElementById('f-rec-grade').value;
-
-  let recs = filterByCycle(ALL_RECORDS);
-  if (from) recs=recs.filter(r=>r.date>=from);
-  if (to)   recs=recs.filter(r=>r.date<=to);
-  if (cycle)recs=recs.filter(r=>r.cycle===cycle);
-  if (grade)recs=recs.filter(r=>r.grade===grade);
-
-  const periodLabel = (from&&to) ? `${from} to ${to}` : from ? `From ${from}` : to ? `Up to ${to}` : 'All Dates';
-  pdfHeader(pdoc, `All Attendance Records — ${periodLabel}`, `Generated: ${generated}`, [71,85,105]);
-
-  const totP=recs.reduce((s,r)=>s+(r.present||0),0), totA=recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
-  const totU=recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
+  const from=document.getElementById('f-rec-from').value, to=document.getElementById('f-rec-to').value;
+  const cycle=document.getElementById('f-rec-cycle').value, grade=document.getElementById('f-rec-grade').value;
+  let recs=filterByCycle(ALL_RECORDS);
+  if(from) recs=recs.filter(r=>r.date>=from); if(to) recs=recs.filter(r=>r.date<=to); if(cycle) recs=recs.filter(r=>r.cycle===cycle); if(grade) recs=recs.filter(r=>r.grade===grade);
+  const periodLabel=(from&&to)?`${from} to ${to}`:from?`From ${from}`:to?`Up to ${to}`:'All Dates';
+  pdfHeader(pdoc,`All Attendance Records — ${periodLabel}`,`Generated: ${generated}`,[71,85,105]);
+  const totP=recs.reduce((s,r)=>s+(r.present||0),0),totA=recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0),totU=recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
   const avgPct=recs.length?Math.round(recs.reduce((s,r)=>s+(r.attendancePct||0),0)/recs.length):0;
   const days=[...new Set(recs.map(r=>r.date))].length;
   pdfSummaryRow(pdoc,[`Total Records: ${recs.length}`,`School Days: ${days}`,`Total Present: ${totP}`,`Auth Absent: ${totA}`,`Unauth Absent: ${totU}`,`Avg Attendance: ${avgPct}%`],34,[71,85,105]);
-
-  pdoc.autoTable({
-    startY:40,
-    head:[['Date','Day','Class','Grade','Cycle','Total','Present','Auth Absent','Unauth Absent','Attendance %','Class Teacher']],
-    body: recs.length ? recs.map(r=>[r.date,r.day||'',r.className,r.grade,r.cycle,r.totalStudents,r.present,r.authorizedAbsent,r.unauthorizedAbsent,(r.attendancePct||0)+'%',r.teacherName])
-                      : [['—','—','—','—','—','—','—','—','—','—','No records found for the selected filters']],
-    styles:{fontSize:7.5,cellPadding:2},
-    headStyles:{fillColor:[71,85,105],textColor:[255,255,255],fontStyle:'bold'},
-    alternateRowStyles:{fillColor:[248,250,252]},
-    columnStyles:{9:{halign:'center'}}
-  });
-
+  pdoc.autoTable({startY:40,head:[['Date','Day','Class','Grade','Cycle','Total','Present','Auth Absent','Unauth Absent','Attendance %','Class Teacher']],body:recs.length?recs.map(r=>[r.date,r.day||'',r.className,r.grade,r.cycle,r.totalStudents,r.present,r.authorizedAbsent,r.unauthorizedAbsent,(r.attendancePct||0)+'%',r.teacherName]):[['—','—','—','—','—','—','—','—','—','—','No records found']],styles:{fontSize:7.5,cellPadding:2},headStyles:{fillColor:[71,85,105],textColor:[255,255,255],fontStyle:'bold'},alternateRowStyles:{fillColor:[248,250,252]},columnStyles:{9:{halign:'center'}}});
   pdoc.save(`PIHSS_All_Records_${from||'all'}_to_${to||'all'}.pdf`);
   toast('✅ All Records PDF downloaded!','success');
 };
 
-// ── LOGIN ─────────────────────────────────────────────────────────
-const LOGIN_CREDENTIALS = { username: 'admin', password: 'pihss2024' };
-
-window.doLogin = function() {
-  const u = document.getElementById('login-user').value.trim();
-  const p = document.getElementById('login-pass').value;
-  const err = document.getElementById('login-error');
-  if (u === LOGIN_CREDENTIALS.username && p === LOGIN_CREDENTIALS.password) {
-    document.getElementById('login-overlay').style.display = 'none';
-    err.textContent = '';
-    loadAll();
-  } else {
-    err.textContent = '⚠️ Invalid username or password.';
-    document.getElementById('login-pass').value = '';
-    document.getElementById('login-pass').focus();
-  }
-};
+// ── LOGIN — handled by plain <script> block above ─────────────────
 
 // ── Init ──────────────────────────────────────────────────────────
 const todayStr = new Date().toISOString().split('T')[0];
