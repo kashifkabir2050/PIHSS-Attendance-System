@@ -411,8 +411,10 @@ tbody td { padding: 10px 13px; }
       <div class="hero-sub">Pakistan Islamia Higher Secondary School Sharjah</div>
     </div>
     <div class="hero-actions">
-      <button class="btn btn-outline btn-sm" onclick="loadAll()">🔄 Refresh</button>
-      <button class="btn btn-gold   btn-sm" onclick="downloadFullPDF()">⬇️ PDF Report</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="loadAll()">🔄 Refresh</button>
+      <button type="button" class="btn btn-gold btn-sm" onclick="downloadTodayPDF()">📅 Today's Report PDF</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="downloadAllReportsPDF()">📥 Download All Reports PDF</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="doLogout()" style="border-color:#dc2626;color:#dc2626">🚪 Logout</button>
     </div>
   </div>
 
@@ -777,6 +779,18 @@ window.switchTab = function(name, btn) {
 
 // ── Load all from Firestore ───────────────────────────────────────
 window.loadAll = async function() {
+  // Ensure date filters are always initialised
+  const _today = new Date().toISOString().split('T')[0];
+  document.getElementById('f-date').value = _today;
+  const _mon = new Date(); _mon.setDate(_mon.getDate()-((_mon.getDay()+6)%7));
+  document.getElementById('f-week-start').value = _mon.toISOString().split('T')[0];
+  document.getElementById('f-month').value = _today.slice(0,7);
+  const _ago = new Date(); _ago.setDate(_ago.getDate()-7);
+  const _agoStr = _ago.toISOString().split('T')[0];
+  document.getElementById('f-absent-from').value = _agoStr;
+  document.getElementById('f-absent-to').value   = _today;
+  document.getElementById('f-rec-from').value    = _agoStr;
+  document.getElementById('f-rec-to').value      = _today;
   spin(true);
   try {
     const q    = query(collection(db,'attendance'), orderBy('date','desc'));
@@ -1076,42 +1090,259 @@ window.deleteRecord = async function(id) {
   finally { spin(false); }
 };
 
-// ── PDF ───────────────────────────────────────────────────────────
-window.downloadFullPDF = function() {
+// ── PDF HELPERS ───────────────────────────────────────────────────
+function pdfHeader(pdoc, title, subtitle, landscape) {
+  const W = landscape ? 297 : 210;
+  pdoc.setFillColor(6,78,59); pdoc.rect(0,0,W,28,'F');
+  pdoc.setTextColor(255,255,255); pdoc.setFontSize(15); pdoc.setFont('helvetica','bold');
+  pdoc.text('Pakistan Islamia Higher Secondary School, Sharjah', W/2, 11, {align:'center'});
+  pdoc.setFontSize(9); pdoc.setFont('helvetica','normal');
+  pdoc.text(subtitle, W/2, 19, {align:'center'});
+  pdoc.setFontSize(11); pdoc.setFont('helvetica','bold');
+  pdoc.setTextColor(6,78,59);
+  pdoc.text(title, W/2, 36, {align:'center'});
+  return 42;
+}
+
+function pdfSummaryBar(pdoc, items, y, landscape) {
+  const W = landscape ? 297 : 210;
+  const boxW = (W - 30) / items.length;
+  items.forEach((item, i) => {
+    const x = 15 + i * boxW;
+    pdoc.setFillColor(...item.bg); pdoc.roundedRect(x, y, boxW-4, 16, 3, 3, 'F');
+    pdoc.setTextColor(...item.fg); pdoc.setFontSize(10); pdoc.setFont('helvetica','bold');
+    pdoc.text(String(item.val), x + (boxW-4)/2, y+7, {align:'center'});
+    pdoc.setFontSize(6.5); pdoc.setFont('helvetica','normal');
+    pdoc.text(item.lbl, x + (boxW-4)/2, y+13, {align:'center'});
+  });
+  return y + 22;
+}
+
+// ── TODAY'S REPORT PDF ────────────────────────────────────────────
+window.downloadTodayPDF = function() {
   const { jsPDF } = window.jspdf;
-  const pdoc = new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+  const pdoc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
   const today = new Date();
-  const date  = document.getElementById('f-date').value || today.toISOString().split('T')[0];
-  let recs = ALL_RECORDS.filter(r=>r.date===date);
+  const date  = today.toISOString().split('T')[0];
+  const recs  = filterByCycle(ALL_RECORDS).filter(r => r.date === date);
 
-  pdoc.setFillColor(6,78,59); pdoc.rect(0,0,297,28,'F');
-  pdoc.setTextColor(255,255,255); pdoc.setFontSize(16); pdoc.setFont('helvetica','bold');
-  pdoc.text('Pakistan Islamia Higher Secondary School, Sharjah',148.5,10,{align:'center'});
-  pdoc.setFontSize(10); pdoc.setFont('helvetica','normal');
-  pdoc.text(`Daily Attendance Report — ${date}  |  Generated: ${today.toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}`,148.5,18,{align:'center'});
+  const genLine = `Generated: ${today.toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}`;
+  let y = pdfHeader(pdoc, `Daily Attendance Report — ${date}`, genLine, true);
 
-  const totP=recs.reduce((s,r)=>s+(r.present||0),0),totA=recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
-  const totU=recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0),totT=recs.reduce((s,r)=>s+(r.totalStudents||0),0);
+  const totP=recs.reduce((s,r)=>s+(r.present||0),0);
+  const totA=recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
+  const totU=recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
+  const totT=recs.reduce((s,r)=>s+(r.totalStudents||0),0);
   const avgPct=recs.length?Math.round(recs.reduce((s,r)=>s+(r.attendancePct||0),0)/recs.length):0;
-  pdoc.setTextColor(6,78,59); pdoc.setFontSize(10); pdoc.setFont('helvetica','bold');
-  pdoc.text(`Total: ${totT}  |  Present: ${totP}  |  Auth Absent: ${totA}  |  Unauth Absent: ${totU}  |  Avg Attendance: ${avgPct}%`,148.5,34,{align:'center'});
 
-  pdoc.autoTable({startY:40,head:[['Class','Grade','Section','Cycle','Total','Present','Auth Absent','Unauth Absent','Attendance %','Class Teacher']],body:recs.map(r=>[r.className,r.grade,r.section,r.cycle,r.totalStudents,r.present,r.authorizedAbsent,r.unauthorizedAbsent,(r.attendancePct||0)+'%',r.teacherName]),styles:{fontSize:8,cellPadding:2.5},headStyles:{fillColor:[6,78,59],textColor:[255,255,255],fontStyle:'bold'},alternateRowStyles:{fillColor:[240,253,244]},columnStyles:{8:{halign:'center'}}});
+  y = pdfSummaryBar(pdoc, [
+    {val:totT,   lbl:'Total Students', bg:[224,242,254], fg:[30,58,138]},
+    {val:totP,   lbl:'Present',        bg:[209,250,229], fg:[6,95,70]},
+    {val:totA,   lbl:'Auth Absent',    bg:[254,243,199], fg:[146,64,14]},
+    {val:totU,   lbl:'Unauth Absent',  bg:[254,226,226], fg:[153,27,27]},
+    {val:avgPct+'%', lbl:'Avg Attendance', bg:[237,233,254], fg:[91,33,182]},
+    {val:recs.length, lbl:'Classes Submitted', bg:[240,253,244], fg:[6,78,59]},
+  ], y, true);
 
+  pdoc.autoTable({
+    startY: y,
+    head:[['Class','Grade','Section','Cycle','Total','Present','Auth Absent','Unauth Absent','Attendance %','Class Teacher']],
+    body: recs.map(r=>[r.className,r.grade,r.section||'',r.cycle,r.totalStudents,r.present,r.authorizedAbsent,r.unauthorizedAbsent,(r.attendancePct||0)+'%',r.teacherName]),
+    styles:{fontSize:8,cellPadding:2.5},
+    headStyles:{fillColor:[6,78,59],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[240,253,244]},
+    columnStyles:{8:{halign:'center'},4:{halign:'center'},5:{halign:'center'},6:{halign:'center'},7:{halign:'center'}},
+    didParseCell: (data) => {
+      if (data.section==='body' && data.column.index===8) {
+        const v = parseInt(data.cell.text[0]);
+        if (v < 70) data.cell.styles.textColor = [220,38,38];
+        else if (v < 85) data.cell.styles.textColor = [217,119,6];
+        else data.cell.styles.textColor = [5,150,105];
+      }
+    }
+  });
+
+  // Absent register page
   pdoc.addPage();
-  pdoc.setFillColor(220,38,38); pdoc.rect(0,0,297,18,'F');
-  pdoc.setTextColor(255,255,255); pdoc.setFontSize(13); pdoc.setFont('helvetica','bold');
-  pdoc.text('Absent Student Register',148.5,12,{align:'center'});
+  const W = 297;
+  pdoc.setFillColor(220,38,38); pdoc.rect(0,0,W,28,'F');
+  pdoc.setTextColor(255,255,255); pdoc.setFontSize(15); pdoc.setFont('helvetica','bold');
+  pdoc.text('Pakistan Islamia Higher Secondary School, Sharjah', W/2, 11, {align:'center'});
+  pdoc.setFontSize(9); pdoc.setFont('helvetica','normal');
+  pdoc.text(`Absent Student Register — ${date}`, W/2, 20, {align:'center'});
 
   const absentRows=[];
   recs.forEach(r=>{
-    (r.authNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(name=>absentRows.push([r.date,r.className,r.grade,name,'Authorized',r.teacherName]));
-    (r.unauthNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(name=>absentRows.push([r.date,r.className,r.grade,name,'Unauthorized',r.teacherName]));
+    (r.authNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(name=>absentRows.push([r.date,r.className,r.grade||'',name,'Authorized',r.teacherName]));
+    (r.unauthNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(name=>absentRows.push([r.date,r.className,r.grade||'',name,'Unauthorized',r.teacherName]));
   });
 
-  pdoc.autoTable({startY:22,head:[['Date','Class','Grade','Student Name','Type','Class Teacher']],body:absentRows.length?absentRows:[['—','—','—','No absent students recorded','—','—']],styles:{fontSize:9,cellPadding:2.5},headStyles:{fillColor:[220,38,38],textColor:[255,255,255],fontStyle:'bold'},alternateRowStyles:{fillColor:[254,242,242]}});
-  pdoc.save(`PIHSS_Attendance_${date}.pdf`);
-  toast('✅ PDF downloaded!','success');
+  pdoc.autoTable({
+    startY:32,
+    head:[['Date','Class','Grade','Student Name','Type','Class Teacher']],
+    body: absentRows.length ? absentRows : [['—','—','—','No absent students recorded for today','—','—']],
+    styles:{fontSize:9,cellPadding:3},
+    headStyles:{fillColor:[220,38,38],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[254,242,242]},
+    didParseCell: (data) => {
+      if (data.section==='body' && data.column.index===4 && data.cell.text[0]==='Unauthorized') {
+        data.cell.styles.textColor=[220,38,38]; data.cell.styles.fontStyle='bold';
+      }
+    }
+  });
+
+  pdoc.save(`PIHSS_Today_Attendance_${date}.pdf`);
+  toast('✅ Today\'s PDF downloaded!','success');
+};
+
+// ── DOWNLOAD ALL REPORTS PDF ──────────────────────────────────────
+window.downloadAllReportsPDF = function() {
+  if (!ALL_RECORDS.length) { toast('⚠️ No records loaded. Click Refresh first.','error'); return; }
+  const { jsPDF } = window.jspdf;
+  const pdoc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
+  const today    = new Date();
+  const genDate  = today.toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const allRecs  = filterByCycle(ALL_RECORDS);
+  const W = 297;
+
+  // ─ Page 1: Summary Overview ─
+  let y = pdfHeader(pdoc, 'Complete Attendance Report — All Records', `Generated: ${genDate}`, true);
+
+  const totP=allRecs.reduce((s,r)=>s+(r.present||0),0);
+  const totA=allRecs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
+  const totU=allRecs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
+  const totT=allRecs.reduce((s,r)=>s+(r.totalStudents||0),0);
+  const avgPct=allRecs.length?Math.round(allRecs.reduce((s,r)=>s+(r.attendancePct||0),0)/allRecs.length):0;
+  const uniqueDates=[...new Set(allRecs.map(r=>r.date))].length;
+
+  y = pdfSummaryBar(pdoc, [
+    {val:allRecs.length, lbl:'Total Submissions', bg:[224,242,254], fg:[30,58,138]},
+    {val:uniqueDates,    lbl:'Days Recorded',     bg:[237,233,254], fg:[91,33,182]},
+    {val:totT,           lbl:'Total Students',    bg:[209,250,229], fg:[6,95,70]},
+    {val:totP,           lbl:'Total Present',     bg:[240,253,244], fg:[6,78,59]},
+    {val:totA,           lbl:'Auth Absences',     bg:[254,243,199], fg:[146,64,14]},
+    {val:totU,           lbl:'Unauth Absences',   bg:[254,226,226], fg:[153,27,27]},
+    {val:avgPct+'%',     lbl:'Overall Avg %',     bg:[209,250,229], fg:[6,78,59]},
+  ], y, true);
+
+  // Section heading
+  pdoc.setFontSize(10); pdoc.setFont('helvetica','bold'); pdoc.setTextColor(6,78,59);
+  pdoc.text('▌ Grade-wise Summary', 15, y+2); y += 8;
+
+  const gradeMap={};
+  allRecs.forEach(r=>{
+    if(!gradeMap[r.grade]) gradeMap[r.grade]={present:0,auth:0,unauth:0,total:0,pctSum:0,cnt:0};
+    gradeMap[r.grade].present+=r.present||0; gradeMap[r.grade].auth+=r.authorizedAbsent||0;
+    gradeMap[r.grade].unauth+=r.unauthorizedAbsent||0; gradeMap[r.grade].total+=r.totalStudents||0;
+    gradeMap[r.grade].pctSum+=r.attendancePct||0; gradeMap[r.grade].cnt++;
+  });
+  const gKeys = Object.keys(gradeMap).sort();
+  pdoc.autoTable({
+    startY: y,
+    head:[['Grade','Total Submissions','Total Students','Total Present','Auth Absences','Unauth Absences','Avg Attendance %']],
+    body: gKeys.map(g=>[g,gradeMap[g].cnt,gradeMap[g].total,gradeMap[g].present,gradeMap[g].auth,gradeMap[g].unauth,Math.round(gradeMap[g].pctSum/gradeMap[g].cnt)+'%']),
+    styles:{fontSize:8.5,cellPadding:3},
+    headStyles:{fillColor:[6,78,59],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[240,253,244]},
+    columnStyles:{6:{halign:'center'}},
+    didParseCell:(data)=>{if(data.section==='body'&&data.column.index===6){const v=parseInt(data.cell.text[0]);data.cell.styles.textColor=v<70?[220,38,38]:v<85?[217,119,6]:[5,150,105];data.cell.styles.fontStyle='bold';}}
+  });
+
+  // ─ Page 2: Cycle Summary ─
+  pdoc.addPage();
+  y = pdfHeader(pdoc, 'Cycle-wise Attendance Summary', `Generated: ${genDate}`, true);
+
+  const cycleMap={};
+  allRecs.forEach(r=>{
+    if(!cycleMap[r.cycle]) cycleMap[r.cycle]={present:0,auth:0,unauth:0,total:0,pctSum:0,cnt:0};
+    cycleMap[r.cycle].present+=r.present||0; cycleMap[r.cycle].auth+=r.authorizedAbsent||0;
+    cycleMap[r.cycle].unauth+=r.unauthorizedAbsent||0; cycleMap[r.cycle].total+=r.totalStudents||0;
+    cycleMap[r.cycle].pctSum+=r.attendancePct||0; cycleMap[r.cycle].cnt++;
+  });
+  const cKeys = Object.keys(cycleMap).sort();
+  pdoc.autoTable({
+    startY: y,
+    head:[['Cycle','Total Submissions','Total Students','Total Present','Auth Absences','Unauth Absences','Avg Attendance %']],
+    body: cKeys.map(c=>[c,cycleMap[c].cnt,cycleMap[c].total,cycleMap[c].present,cycleMap[c].auth,cycleMap[c].unauth,Math.round(cycleMap[c].pctSum/cycleMap[c].cnt)+'%']),
+    styles:{fontSize:9,cellPadding:3.5},
+    headStyles:{fillColor:[6,78,59],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[240,253,244]},
+    columnStyles:{6:{halign:'center'}},
+    didParseCell:(data)=>{if(data.section==='body'&&data.column.index===6){const v=parseInt(data.cell.text[0]);data.cell.styles.textColor=v<70?[220,38,38]:v<85?[217,119,6]:[5,150,105];data.cell.styles.fontStyle='bold';}}
+  });
+
+  // Day-wise summary
+  const dayMap={};
+  allRecs.forEach(r=>{
+    if(!dayMap[r.date]) dayMap[r.date]={present:0,auth:0,unauth:0,total:0,pctSum:0,cnt:0,day:r.day||''};
+    dayMap[r.date].present+=r.present||0; dayMap[r.date].auth+=r.authorizedAbsent||0;
+    dayMap[r.date].unauth+=r.unauthorizedAbsent||0; dayMap[r.date].total+=r.totalStudents||0;
+    dayMap[r.date].pctSum+=r.attendancePct||0; dayMap[r.date].cnt++;
+  });
+  const dKeys = Object.keys(dayMap).sort().reverse();
+
+  const afterCycle = pdoc.lastAutoTable.finalY + 12;
+  pdoc.setFontSize(10); pdoc.setFont('helvetica','bold'); pdoc.setTextColor(6,78,59);
+  pdoc.text('▌ Day-wise Attendance Summary (Most Recent First)', 15, afterCycle);
+  pdoc.autoTable({
+    startY: afterCycle + 6,
+    head:[['Date','Day','Classes Submitted','Total Students','Total Present','Auth Absences','Unauth Absences','Avg Attendance %']],
+    body: dKeys.map(d=>[d,dayMap[d].day,dayMap[d].cnt,dayMap[d].total,dayMap[d].present,dayMap[d].auth,dayMap[d].unauth,Math.round(dayMap[d].pctSum/dayMap[d].cnt)+'%']),
+    styles:{fontSize:8,cellPadding:2.5},
+    headStyles:{fillColor:[37,99,235],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[239,246,255]},
+    columnStyles:{7:{halign:'center'}},
+    didParseCell:(data)=>{if(data.section==='body'&&data.column.index===7){const v=parseInt(data.cell.text[0]);data.cell.styles.textColor=v<70?[220,38,38]:v<85?[217,119,6]:[5,150,105];data.cell.styles.fontStyle='bold';}}
+  });
+
+  // ─ Page 3: Full Records ─
+  pdoc.addPage();
+  y = pdfHeader(pdoc, 'Full Attendance Records — All Classes', `Generated: ${genDate}`, true);
+  pdoc.autoTable({
+    startY: y,
+    head:[['Date','Day','Class','Grade','Cycle','Total','Present','Auth Absent','Unauth Absent','Att %','Class Teacher']],
+    body: [...allRecs].sort((a,b)=>b.date.localeCompare(a.date)).map(r=>[r.date,r.day||'',r.className,r.grade,r.cycle,r.totalStudents,r.present,r.authorizedAbsent,r.unauthorizedAbsent,(r.attendancePct||0)+'%',r.teacherName]),
+    styles:{fontSize:7.5,cellPadding:2},
+    headStyles:{fillColor:[6,78,59],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[240,253,244]},
+    columnStyles:{9:{halign:'center'}},
+    didParseCell:(data)=>{if(data.section==='body'&&data.column.index===9){const v=parseInt(data.cell.text[0]);data.cell.styles.textColor=v<70?[220,38,38]:v<85?[217,119,6]:[5,150,105];}}
+  });
+
+  // ─ Page 4: Absent Register ─
+  pdoc.addPage();
+  pdoc.setFillColor(220,38,38); pdoc.rect(0,0,W,28,'F');
+  pdoc.setTextColor(255,255,255); pdoc.setFontSize(15); pdoc.setFont('helvetica','bold');
+  pdoc.text('Pakistan Islamia Higher Secondary School, Sharjah', W/2, 11, {align:'center'});
+  pdoc.setFontSize(9); pdoc.setFont('helvetica','normal');
+  pdoc.text(`Complete Absent Student Register  |  Generated: ${genDate}`, W/2, 20, {align:'center'});
+
+  const allAbsent=[];
+  [...allRecs].sort((a,b)=>b.date.localeCompare(a.date)).forEach(r=>{
+    (r.authNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>allAbsent.push([r.date,r.day||'',r.className,r.grade,n,'Authorized',r.teacherName]));
+    (r.unauthNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>allAbsent.push([r.date,r.day||'',r.className,r.grade,n,'Unauthorized',r.teacherName]));
+  });
+  pdoc.autoTable({
+    startY:32,
+    head:[['Date','Day','Class','Grade','Student Name','Type','Class Teacher']],
+    body: allAbsent.length ? allAbsent : [['—','—','—','—','No absent students recorded','—','—']],
+    styles:{fontSize:8,cellPadding:2.5},
+    headStyles:{fillColor:[220,38,38],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[254,242,242]},
+    didParseCell:(data)=>{if(data.section==='body'&&data.column.index===5&&data.cell.text[0]==='Unauthorized'){data.cell.styles.textColor=[220,38,38];data.cell.styles.fontStyle='bold';}}
+  });
+
+  // Footer on all pages
+  const pageCount = pdoc.internal.getNumberOfPages();
+  for (let i=1; i<=pageCount; i++) {
+    pdoc.setPage(i);
+    pdoc.setFontSize(7.5); pdoc.setFont('helvetica','normal'); pdoc.setTextColor(150,150,150);
+    pdoc.text(`PIHSS Sharjah — Attendance System  |  Page ${i} of ${pageCount}  |  ${genDate}`, W/2, 205, {align:'center'});
+  }
+
+  const fname = `PIHSS_All_Reports_${today.toISOString().split('T')[0]}.pdf`;
+  pdoc.save(fname);
+  toast(`✅ All Reports PDF downloaded! (${pageCount} pages)`, 'success');
 };
 
 // ── LOGIN ─────────────────────────────────────────────────────────
@@ -1122,6 +1353,7 @@ window.doLogin = function() {
   const p = document.getElementById('login-pass').value;
   const err = document.getElementById('login-error');
   if (u === LOGIN_CREDENTIALS.username && p === LOGIN_CREDENTIALS.password) {
+    sessionStorage.setItem('pihss_auth', '1');
     document.getElementById('login-overlay').style.display = 'none';
     err.textContent = '';
     loadAll();
@@ -1132,9 +1364,20 @@ window.doLogin = function() {
   }
 };
 
+window.doLogout = function() {
+  sessionStorage.removeItem('pihss_auth');
+  location.reload();
+};
+
 // ── Init ──────────────────────────────────────────────────────────
 const todayStr = new Date().toISOString().split('T')[0];
 document.getElementById('f-date').value = todayStr;
+
+// Auto-login if session exists
+if (sessionStorage.getItem('pihss_auth') === '1') {
+  document.getElementById('login-overlay').style.display = 'none';
+  loadAll();
+}
 
 const mon = new Date(); mon.setDate(mon.getDate()-((mon.getDay()+6)%7));
 document.getElementById('f-week-start').value = mon.toISOString().split('T')[0];
@@ -1146,6 +1389,7 @@ document.getElementById('f-absent-from').value = agoStr;
 document.getElementById('f-absent-to').value   = todayStr;
 document.getElementById('f-rec-from').value    = agoStr;
 document.getElementById('f-rec-to').value      = todayStr;
+
 
 </script>
 </body>
