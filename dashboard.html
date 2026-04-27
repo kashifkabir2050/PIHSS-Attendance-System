@@ -146,6 +146,7 @@ body {
 .time-tab[data-tab="student"].active   { background: linear-gradient(135deg,var(--emerald),var(--emerald-mid)); border-color:var(--emerald); }
 .time-tab[data-tab="absent"].active    { background: linear-gradient(135deg,var(--ruby),#b91c1c); border-color:var(--ruby); }
 .time-tab[data-tab="records"].active   { background: linear-gradient(135deg,#475569,#1e293b); border-color:#475569; }
+.time-tab[data-tab="gender"].active    { background: linear-gradient(135deg,#2563eb,#db2777); border-color:#2563eb; }
 
 /* ── Tab panels ─── */
 .tab-panel { display: none; }
@@ -347,6 +348,37 @@ tbody td { padding: 10px 13px; }
 }
 .login-btn:hover { filter: brightness(1.08); transform: translateY(-2px); }
 
+/* ── Gender Filter Bar ─── */
+.gender-filter-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: linear-gradient(135deg,#eff6ff,#f0fdf4);
+  border: 1.5px solid #bfdbfe; border-radius: 12px;
+  padding: 12px 18px; margin-bottom: 18px;
+}
+.gender-filter-label {
+  font-size: .72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .8px; color: var(--ink-soft); white-space: nowrap;
+}
+.gender-check-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.gender-check {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 40px; cursor: pointer;
+  border: 2px solid transparent; font-size: .82rem; font-weight: 600;
+  transition: all .2s; user-select: none;
+}
+.gender-check input { display: none; }
+.gender-check.male   { background: #dbeafe; color: #1e3a8a; border-color: #93c5fd; }
+.gender-check.female { background: #fce7f3; color: #831843; border-color: #f9a8d4; }
+.gender-check.male.checked   { background: #2563eb; color: white; border-color: #2563eb; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
+.gender-check.female.checked { background: #db2777; color: white; border-color: #db2777; box-shadow: 0 4px 12px rgba(219,39,119,0.3); }
+.gender-badge-m { display:inline-block;padding:2px 8px;border-radius:12px;font-size:.7rem;font-weight:700;background:#dbeafe;color:#1e3a8a; }
+.gender-badge-f { display:inline-block;padding:2px 8px;border-radius:12px;font-size:.7rem;font-weight:700;background:#fce7f3;color:#831843; }
+.gender-note {
+  font-size:.72rem;color:var(--ink-soft);
+  background:white;border:1px solid #e2e8f0;border-radius:8px;
+  padding:4px 10px;
+}
+
 /* ── Responsive ─── */
 @media (max-width:640px) {
   .header-inner { flex-wrap: wrap; }
@@ -450,6 +482,22 @@ tbody td { padding: 10px 13px; }
     </div>
   </div>
 
+  <!-- ════════════ GENDER FILTER (Middle & Higher only) ════════════ -->
+  <div class="gender-filter-bar" id="gender-filter-bar" style="display:none">
+    <span class="gender-filter-label">⚥ Gender Filter</span>
+    <div class="gender-check-group">
+      <label class="gender-check male checked" id="lbl-male">
+        <input type="checkbox" id="chk-male" checked onchange="onGenderChange()"/>
+        ♂ Male (AB, BB, CB, DB…)
+      </label>
+      <label class="gender-check female checked" id="lbl-female">
+        <input type="checkbox" id="chk-female" checked onchange="onGenderChange()"/>
+        ♀ Female (AG, BG, CG, DG…)
+      </label>
+    </div>
+    <span class="gender-note">Middle &amp; Higher sections only</span>
+  </div>
+
   <!-- ════════════ TIME PERIOD TABS ════════════ -->
   <div class="time-tabs-section">
     <div class="section-label">Select Report Period</div>
@@ -460,6 +508,7 @@ tbody td { padding: 10px 13px; }
       <button class="time-tab"        data-tab="student" onclick="switchTab('student', this)">👤 Student Records</button>
       <button class="time-tab"        data-tab="absent"  onclick="switchTab('absent',  this)">🚨 Absent Register</button>
       <button class="time-tab"        data-tab="records" onclick="switchTab('records', this)">📁 All Records</button>
+      <button class="time-tab"        data-tab="gender"  onclick="switchTab('gender',  this)">⚥ Gender Report</button>
     </div>
   </div>
 
@@ -499,7 +548,7 @@ tbody td { padding: 10px 13px; }
       <div class="table-wrap">
         <table id="tbl-daily">
           <thead><tr>
-            <th>Class</th><th>Grade</th><th>Section</th><th>Cycle</th>
+            <th>Class</th><th>Grade</th><th>Section</th><th>Gender</th><th>Cycle</th>
             <th>Total</th><th>Present</th><th>Auth Absent</th><th>Unauth Absent</th>
             <th>Attendance %</th><th>Class Teacher</th>
           </tr></thead>
@@ -538,7 +587,7 @@ tbody td { padding: 10px 13px; }
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Class</th><th>Grade</th><th>Section</th><th>Cycle</th>
+            <th>Class</th><th>Grade</th><th>Section</th><th>Gender</th><th>Cycle</th>
             <th>Days Submitted</th><th>Avg Present</th><th>Avg Absent</th><th>Avg Attendance %</th>
           </tr></thead>
           <tbody id="tbody-weekly"></tbody>
@@ -576,7 +625,7 @@ tbody td { padding: 10px 13px; }
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Class</th><th>Grade</th><th>Section</th><th>Cycle</th>
+            <th>Class</th><th>Grade</th><th>Section</th><th>Gender</th><th>Cycle</th>
             <th>Days</th><th>Avg Present</th><th>Total Auth Absent</th>
             <th>Total Unauth Absent</th><th>Avg Attendance %</th>
           </tr></thead>
@@ -637,6 +686,14 @@ tbody td { padding: 10px 13px; }
         <label>Grade</label>
         <select id="f-absent-grade"><option value="">All Grades</option></select>
       </div>
+      <div class="form-group" id="absent-gender-wrap">
+        <label>Gender</label>
+        <select id="f-absent-gender">
+          <option value="">All Genders</option>
+          <option value="male">♂ Male (AB/BB/CB/DB)</option>
+          <option value="female">♀ Female (AG/BG/CG/DG)</option>
+        </select>
+      </div>
       <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="renderAbsent()">🔍 Filter</button>
     </div>
     <div class="stats-row" id="absent-stats"></div>
@@ -677,6 +734,14 @@ tbody td { padding: 10px 13px; }
         <label>Grade</label>
         <select id="f-rec-grade"><option value="">All Grades</option></select>
       </div>
+      <div class="form-group">
+        <label>Gender</label>
+        <select id="f-rec-gender">
+          <option value="">All Genders</option>
+          <option value="male">♂ Male</option>
+          <option value="female">♀ Female</option>
+        </select>
+      </div>
       <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="renderRecords()">🔍 Filter</button>
     </div>
     <div class="card">
@@ -689,6 +754,48 @@ tbody td { padding: 10px 13px; }
             <th>%</th><th>Teacher</th><th>Actions</th>
           </tr></thead>
           <tbody id="tbody-records"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════ GENDER REPORT TAB ════════════ -->
+  <div class="tab-panel" id="tab-gender">
+    <div class="filter-row">
+      <div class="form-group">
+        <label>From Date</label>
+        <input type="date" id="f-gender-from"/>
+      </div>
+      <div class="form-group">
+        <label>To Date</label>
+        <input type="date" id="f-gender-to"/>
+      </div>
+      <div class="form-group">
+        <label>Grade</label>
+        <select id="f-gender-grade"><option value="">All Grades</option></select>
+      </div>
+      <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="renderGenderReport()">🔍 Filter</button>
+    </div>
+    <div class="stats-row" id="gender-stats"></div>
+    <div class="dash-grid">
+      <div class="card">
+        <div class="card-title">♂ vs ♀ Avg Attendance %</div>
+        <div class="chart-container"><canvas id="chart-gender-compare"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 Grade-wise Gender Breakdown</div>
+        <div class="chart-container"><canvas id="chart-gender-grade"></canvas></div>
+      </div>
+    </div>
+    <div class="section-heading">⚥ Gender-wise Class Report (Middle &amp; Higher)</div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Class</th><th>Grade</th><th>Section</th><th>Gender</th><th>Cycle</th>
+            <th>Days</th><th>Total Present</th><th>Auth Absent</th><th>Unauth Absent</th><th>Avg Attendance %</th>
+          </tr></thead>
+          <tbody id="tbody-gender"></tbody>
         </table>
       </div>
     </div>
@@ -715,6 +822,62 @@ const db  = getFirestore(app);
 let ALL_RECORDS = [];
 const CHARTS = {};
 let ACTIVE_CYCLE = '';
+
+// ── Gender helpers ────────────────────────────────────────────────
+// Male sections end with B (AB,BB,CB,DB,…) Female end with G (AG,BG,CG,DG,…)
+const GENDERED_CYCLES = ['Middle','Higher'];
+
+function sectionGender(section) {
+  if (!section) return null;
+  const s = section.toUpperCase();
+  if (/B$/.test(s)) return 'male';
+  if (/G$/.test(s)) return 'female';
+  return null; // primary/KG sections have no gender split
+}
+
+function recordGender(r) { return sectionGender(r.section); }
+
+// Returns true when this record should pass the global gender checkbox filter
+function passesGenderFilter(r) {
+  // Only apply gender filter for Middle/Higher
+  if (!GENDERED_CYCLES.includes(r.cycle)) return true;
+  const g = recordGender(r);
+  if (!g) return true; // section not gendered — always show
+  const chkM = document.getElementById('chk-male')?.checked ?? true;
+  const chkF = document.getElementById('chk-female')?.checked ?? true;
+  if (g === 'male')   return chkM;
+  if (g === 'female') return chkF;
+  return true;
+}
+
+function filterByCycleAndGender(records) {
+  return filterByCycle(records).filter(passesGenderFilter);
+}
+
+// Gender badge helper
+function genderBadge(section) {
+  const g = sectionGender(section);
+  if (g === 'male')   return '<span class="gender-badge-m">♂ Male</span>';
+  if (g === 'female') return '<span class="gender-badge-f">♀ Female</span>';
+  return '<span style="color:#94a3b8;font-size:.72rem;">—</span>';
+}
+
+// Show/hide the gender filter bar based on active cycle
+function updateGenderBarVisibility() {
+  const bar = document.getElementById('gender-filter-bar');
+  if (!bar) return;
+  bar.style.display = (!ACTIVE_CYCLE || GENDERED_CYCLES.includes(ACTIVE_CYCLE)) ? 'flex' : 'none';
+}
+
+window.onGenderChange = function() {
+  // Sync label checked classes
+  ['male','female'].forEach(g => {
+    const chk = document.getElementById('chk-'+g);
+    const lbl = document.getElementById('lbl-'+g);
+    if (chk && lbl) lbl.classList.toggle('checked', chk.checked);
+  });
+  refreshCurrentTab(document.querySelector('.tab-panel.active')?.id.replace('tab-','') || 'daily');
+};
 
 const PALETTE = {
   green: ['rgba(5,150,105,0.85)','rgba(5,150,105,0.15)'],
@@ -751,6 +914,7 @@ window.selectCycle = function(btn, cycle) {
   document.querySelectorAll('.cycle-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   ACTIVE_CYCLE = cycle;
+  updateGenderBarVisibility();
   // Re-render the active tab
   const activeTab = document.querySelector('.tab-panel.active');
   if (activeTab) {
@@ -766,6 +930,7 @@ function refreshCurrentTab(name) {
   else if (name==='absent')   renderAbsent();
   else if (name==='records')  renderRecords();
   else if (name==='student')  searchStudent();
+  else if (name==='gender')   renderGenderReport();
 }
 
 // ── Tab switching ─────────────────────────────────────────────────
@@ -791,6 +956,8 @@ window.loadAll = async function() {
   document.getElementById('f-absent-to').value   = _today;
   document.getElementById('f-rec-from').value    = _agoStr;
   document.getElementById('f-rec-to').value      = _today;
+  document.getElementById('f-gender-from').value = _agoStr;
+  document.getElementById('f-gender-to').value   = _today;
   spin(true);
   try {
     const q    = query(collection(db,'attendance'), orderBy('date','desc'));
@@ -806,7 +973,7 @@ window.loadAll = async function() {
 
 function populateGradeFilters() {
   const grades = [...new Set(ALL_RECORDS.map(r=>r.grade))].sort();
-  ['f-grade-daily','f-absent-grade','f-rec-grade'].forEach(id => {
+  ['f-grade-daily','f-absent-grade','f-rec-grade','f-gender-grade'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.innerHTML = '<option value="">All Grades</option>';
@@ -819,19 +986,28 @@ window.renderDaily = function() {
   const dateEl  = document.getElementById('f-date');
   const gradeEl = document.getElementById('f-grade-daily');
   let target = dateEl.value || new Date().toISOString().split('T')[0];
-  let recs   = filterByCycle(ALL_RECORDS).filter(r => r.date === target);
+  let recs   = filterByCycleAndGender(ALL_RECORDS).filter(r => r.date === target);
   if (gradeEl.value) recs = recs.filter(r => r.grade === gradeEl.value);
 
   const totPresent = recs.reduce((s,r)=>s+(r.present||0),0);
   const totAuth    = recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
   const totUnauth  = recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
   const avgPct     = recs.length ? Math.round(recs.reduce((s,r)=>s+(r.attendancePct||0),0)/recs.length) : 0;
+
+  // Gender breakdown for Middle/Higher
+  const mRecs = recs.filter(r=>recordGender(r)==='male');
+  const fRecs = recs.filter(r=>recordGender(r)==='female');
+  const mPct  = mRecs.length ? Math.round(mRecs.reduce((s,r)=>s+(r.attendancePct||0),0)/mRecs.length) : null;
+  const fPct  = fRecs.length ? Math.round(fRecs.reduce((s,r)=>s+(r.attendancePct||0),0)/fRecs.length) : null;
+
   document.getElementById('daily-stats').innerHTML = `
     <div class="stat-box green"><div class="num">${fmt(totPresent)}</div><div class="lbl">Present</div></div>
     <div class="stat-box gold"><div class="num">${fmt(totAuth)}</div><div class="lbl">Auth Absent</div></div>
     <div class="stat-box danger"><div class="num">${fmt(totUnauth)}</div><div class="lbl">Unauth Absent</div></div>
     <div class="stat-box info"><div class="num">${avgPct}%</div><div class="lbl">Avg Attendance</div></div>
     <div class="stat-box info"><div class="num">${recs.length}</div><div class="lbl">Classes Submitted</div></div>
+    ${mPct!==null?`<div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff"><div class="num" style="color:#2563eb">${mPct}%</div><div class="lbl">♂ Male Avg</div></div>`:''}
+    ${fPct!==null?`<div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8"><div class="num" style="color:#db2777">${fPct}%</div><div class="lbl">♀ Female Avg</div></div>`:''}
   `;
 
   const tbody = document.getElementById('tbody-daily');
@@ -840,12 +1016,13 @@ window.renderDaily = function() {
         const pc = r.attendancePct||0;
         const cl = pc<70?'danger':pc<85?'gold':'green';
         return `<tr>
-          <td><strong>${r.className}</strong></td><td>${r.grade}</td><td>${r.section}</td><td>${r.cycle}</td>
+          <td><strong>${r.className}</strong></td><td>${r.grade}</td><td>${r.section}</td>
+          <td>${genderBadge(r.section)}</td><td>${r.cycle}</td>
           <td>${r.totalStudents}</td><td>${r.present}</td><td>${r.authorizedAbsent}</td><td>${r.unauthorizedAbsent}</td>
           <td>${badge(pc+'%',cl)}</td><td>${r.teacherName}</td>
         </tr>`;
       }).join('')
-    : `<tr><td colspan="10" style="text-align:center;padding:40px;color:#94a3b8">No data for ${target}</td></tr>`;
+    : `<tr><td colspan="11" style="text-align:center;padding:40px;color:#94a3b8">No data for ${target}</td></tr>`;
 
   // Trend (14 days)
   const end  = new Date(target+'T00:00:00');
@@ -853,7 +1030,7 @@ window.renderDaily = function() {
     const d = new Date(end); d.setDate(d.getDate()-13+i);
     return d.toISOString().split('T')[0];
   });
-  const baseRecs = filterByCycle(ALL_RECORDS);
+  const baseRecs = filterByCycleAndGender(ALL_RECORDS);
   makeChart('chart-daily-trend',{
     type:'line',
     data:{
@@ -895,7 +1072,7 @@ window.renderWeekly = function() {
   const start = new Date(wsEl.value+'T00:00:00');
   const days  = Array.from({length:7},(_,i)=>{const d=new Date(start);d.setDate(d.getDate()+i);return d.toISOString().split('T')[0];});
   const DSHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  let recs = filterByCycle(ALL_RECORDS).filter(r=>days.includes(r.date));
+  let recs = filterByCycleAndGender(ALL_RECORDS).filter(r=>days.includes(r.date));
 
   const totP=recs.reduce((s,r)=>s+(r.present||0),0), totA=recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
   const totU=recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
@@ -934,10 +1111,11 @@ window.renderWeekly = function() {
   const classMap={};
   recs.forEach(r=>{const k=r.className;if(!classMap[k])classMap[k]={grade:r.grade,section:r.section,cycle:r.cycle,days:0,pSum:0,aSum:0,uSum:0,pctSum:0};classMap[k].days++;classMap[k].pSum+=r.present||0;classMap[k].aSum+=r.authorizedAbsent||0;classMap[k].uSum+=r.unauthorizedAbsent||0;classMap[k].pctSum+=r.attendancePct||0;});
   document.getElementById('tbody-weekly').innerHTML=Object.entries(classMap).map(([cls,v])=>`
-    <tr><td><strong>${cls}</strong></td><td>${v.grade}</td><td>${v.section}</td><td>${v.cycle}</td>
+    <tr><td><strong>${cls}</strong></td><td>${v.grade}</td><td>${v.section}</td>
+    <td>${genderBadge(v.section)}</td><td>${v.cycle}</td>
     <td>${v.days}</td><td>${Math.round(v.pSum/v.days)}</td><td>${Math.round(v.aSum/v.days)}</td>
     <td>${badge(Math.round(v.pctSum/v.days)+'%','green')}</td></tr>`).join('')
-    ||'<tr><td colspan="8" style="text-align:center;padding:30px;color:#94a3b8">No data this week</td></tr>';
+    ||'<tr><td colspan="9" style="text-align:center;padding:30px;color:#94a3b8">No data this week</td></tr>';
 };
 
 // ── MONTHLY ───────────────────────────────────────────────────────
@@ -945,7 +1123,7 @@ window.renderMonthly = function() {
   const mEl = document.getElementById('f-month');
   if (!mEl.value) mEl.value = new Date().toISOString().slice(0,7);
   const month = mEl.value;
-  let recs = filterByCycle(ALL_RECORDS).filter(r=>r.date&&r.date.startsWith(month));
+  let recs = filterByCycleAndGender(ALL_RECORDS).filter(r=>r.date&&r.date.startsWith(month));
 
   const totP=recs.reduce((s,r)=>s+(r.present||0),0),totA=recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
   const totU=recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
@@ -985,10 +1163,11 @@ window.renderMonthly = function() {
   const classMap={};
   recs.forEach(r=>{const k=r.className;if(!classMap[k])classMap[k]={grade:r.grade,section:r.section,cycle:r.cycle,days:0,pSum:0,aSum:0,uSum:0,pctSum:0};classMap[k].days++;classMap[k].pSum+=r.present||0;classMap[k].aSum+=r.authorizedAbsent||0;classMap[k].uSum+=r.unauthorizedAbsent||0;classMap[k].pctSum+=r.attendancePct||0;});
   document.getElementById('tbody-monthly').innerHTML=Object.entries(classMap).map(([cls,v])=>`
-    <tr><td><strong>${cls}</strong></td><td>${v.grade}</td><td>${v.section}</td><td>${v.cycle}</td>
+    <tr><td><strong>${cls}</strong></td><td>${v.grade}</td><td>${v.section}</td>
+    <td>${genderBadge(v.section)}</td><td>${v.cycle}</td>
     <td>${v.days}</td><td>${Math.round(v.pSum/v.days)}</td><td>${v.aSum}</td><td>${v.uSum}</td>
     <td>${badge(Math.round(v.pctSum/v.days)+'%','green')}</td></tr>`).join('')
-    ||'<tr><td colspan="9" style="text-align:center;padding:30px;color:#94a3b8">No data this month</td></tr>';
+    ||'<tr><td colspan="10" style="text-align:center;padding:30px;color:#94a3b8">No data this month</td></tr>';
 };
 
 // ── STUDENT SEARCH ────────────────────────────────────────────────
@@ -1000,7 +1179,7 @@ window.searchStudent = function() {
   if (q.length < 2) { res.innerHTML=''; cw.style.display='none'; return; }
 
   const hits=[];
-  filterByCycle(ALL_RECORDS).forEach(r=>{
+  filterByCycleAndGender(ALL_RECORDS).forEach(r=>{
     if ((!type||type==='authorized')   && r.authNames   && r.authNames.toLowerCase().includes(q))
       hits.push({date:r.date,class:r.className,cycle:r.cycle,grade:r.grade,type:'Authorized',teacher:r.teacherName});
     if ((!type||type==='unauthorized') && r.unauthNames && r.unauthNames.toLowerCase().includes(q))
@@ -1033,14 +1212,19 @@ window.searchStudent = function() {
 
 // ── ABSENT REGISTER ───────────────────────────────────────────────
 window.renderAbsent = function() {
-  const from  = document.getElementById('f-absent-from').value;
-  const to    = document.getElementById('f-absent-to').value;
-  const type  = document.getElementById('f-absent-type').value;
-  const grade = document.getElementById('f-absent-grade').value;
+  const from   = document.getElementById('f-absent-from').value;
+  const to     = document.getElementById('f-absent-to').value;
+  const type   = document.getElementById('f-absent-type').value;
+  const grade  = document.getElementById('f-absent-grade').value;
+  const gender = document.getElementById('f-absent-gender').value;
   let recs = filterByCycle(ALL_RECORDS);
-  if (from) recs=recs.filter(r=>r.date>=from);
-  if (to)   recs=recs.filter(r=>r.date<=to);
-  if (grade)recs=recs.filter(r=>r.grade===grade);
+  if (from)   recs=recs.filter(r=>r.date>=from);
+  if (to)     recs=recs.filter(r=>r.date<=to);
+  if (grade)  recs=recs.filter(r=>r.grade===grade);
+  if (gender) recs=recs.filter(r=>{
+    const g=recordGender(r);
+    return !g || g===gender; // non-gendered sections always pass
+  });
 
   const rows=[];
   recs.forEach(r=>{
@@ -1062,19 +1246,116 @@ window.renderAbsent = function() {
 
 // ── ALL RECORDS ───────────────────────────────────────────────────
 window.renderRecords = function() {
-  const from  = document.getElementById('f-rec-from').value;
-  const to    = document.getElementById('f-rec-to').value;
-  const cycle = document.getElementById('f-rec-cycle').value;
-  const grade = document.getElementById('f-rec-grade').value;
+  const from   = document.getElementById('f-rec-from').value;
+  const to     = document.getElementById('f-rec-to').value;
+  const cycle  = document.getElementById('f-rec-cycle').value;
+  const grade  = document.getElementById('f-rec-grade').value;
+  const gender = document.getElementById('f-rec-gender').value;
   let recs = filterByCycle(ALL_RECORDS);
-  if (from) recs=recs.filter(r=>r.date>=from);
-  if (to)   recs=recs.filter(r=>r.date<=to);
-  if (cycle)recs=recs.filter(r=>r.cycle===cycle);
-  if (grade)recs=recs.filter(r=>r.grade===grade);
+  if (from)   recs=recs.filter(r=>r.date>=from);
+  if (to)     recs=recs.filter(r=>r.date<=to);
+  if (cycle)  recs=recs.filter(r=>r.cycle===cycle);
+  if (grade)  recs=recs.filter(r=>r.grade===grade);
+  if (gender) recs=recs.filter(r=>{
+    const g=recordGender(r);
+    return !g || g===gender;
+  });
 
   document.getElementById('tbody-records').innerHTML=recs.length
     ?recs.map(r=>{const pc=r.attendancePct||0,cl=pc<70?'danger':pc<85?'gold':'green';return`<tr><td>${r.date}</td><td>${r.day||''}</td><td><strong>${r.className}</strong></td><td>${r.cycle}</td><td>${r.totalStudents}</td><td>${r.present}</td><td>${r.authorizedAbsent}</td><td>${r.unauthorizedAbsent}</td><td>${badge(pc+'%',cl)}</td><td>${r.teacherName}</td><td><button class="btn btn-danger btn-sm" onclick="deleteRecord('${r.id}')">🗑️</button></td></tr>`;}).join('')
     :'<tr><td colspan="11" style="text-align:center;padding:30px;color:#94a3b8">No records found</td></tr>';
+};
+
+// ── GENDER REPORT ─────────────────────────────────────────────────
+window.renderGenderReport = function() {
+  const from  = document.getElementById('f-gender-from').value;
+  const to    = document.getElementById('f-gender-to').value;
+  const grade = document.getElementById('f-gender-grade').value;
+
+  // Only Middle & Higher sections with gendered sections
+  let recs = filterByCycle(ALL_RECORDS).filter(r => GENDERED_CYCLES.includes(r.cycle) && recordGender(r));
+  if (from)  recs = recs.filter(r=>r.date>=from);
+  if (to)    recs = recs.filter(r=>r.date<=to);
+  if (grade) recs = recs.filter(r=>r.grade===grade);
+
+  const mRecs = recs.filter(r=>recordGender(r)==='male');
+  const fRecs = recs.filter(r=>recordGender(r)==='female');
+
+  const calcAvg = (arr) => arr.length ? Math.round(arr.reduce((s,r)=>s+(r.attendancePct||0),0)/arr.length) : 0;
+  const calcP   = (arr) => arr.reduce((s,r)=>s+(r.present||0),0);
+  const calcA   = (arr) => arr.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
+  const calcU   = (arr) => arr.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
+
+  const mAvg=calcAvg(mRecs), fAvg=calcAvg(fRecs);
+  const mP=calcP(mRecs), fP=calcP(fRecs);
+  const mA=calcA(mRecs), fA=calcA(fRecs);
+  const mU=calcU(mRecs), fU=calcU(fRecs);
+
+  document.getElementById('gender-stats').innerHTML = `
+    <div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff">
+      <div class="num" style="color:#2563eb">${mRecs.length}</div><div class="lbl">♂ Male Classes</div></div>
+    <div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff">
+      <div class="num" style="color:#2563eb">${fmt(mP)}</div><div class="lbl">♂ Male Present</div></div>
+    <div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff">
+      <div class="num" style="color:#2563eb">${mAvg}%</div><div class="lbl">♂ Male Avg %</div></div>
+    <div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8">
+      <div class="num" style="color:#db2777">${fRecs.length}</div><div class="lbl">♀ Female Classes</div></div>
+    <div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8">
+      <div class="num" style="color:#db2777">${fmt(fP)}</div><div class="lbl">♀ Female Present</div></div>
+    <div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8">
+      <div class="num" style="color:#db2777">${fAvg}%</div><div class="lbl">♀ Female Avg %</div></div>
+  `;
+
+  // Chart: compare male vs female overall
+  makeChart('chart-gender-compare',{
+    type:'bar',
+    data:{
+      labels:['Present','Auth Absent','Unauth Absent','Avg Attendance %'],
+      datasets:[
+        {label:'♂ Male',  data:[mP,mA,mU,mAvg], backgroundColor:'rgba(37,99,235,0.8)',  borderRadius:8, borderSkipped:false},
+        {label:'♀ Female',data:[fP,fA,fU,fAvg],  backgroundColor:'rgba(219,39,119,0.8)', borderRadius:8, borderSkipped:false},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{grid:{display:false}},y:{beginAtZero:true}}}
+  });
+
+  // Chart: grade-wise breakdown
+  const grades=[...new Set(recs.map(r=>r.grade))].sort();
+  makeChart('chart-gender-grade',{
+    type:'bar',
+    data:{
+      labels:grades,
+      datasets:[
+        {label:'♂ Male Avg %',  data:grades.map(g=>{const a=mRecs.filter(r=>r.grade===g);return a.length?Math.round(a.reduce((s,r)=>s+(r.attendancePct||0),0)/a.length):0;}), backgroundColor:'rgba(37,99,235,0.8)',  borderRadius:6, borderSkipped:false},
+        {label:'♀ Female Avg %',data:grades.map(g=>{const a=fRecs.filter(r=>r.grade===g);return a.length?Math.round(a.reduce((s,r)=>s+(r.attendancePct||0),0)/a.length):0;}), backgroundColor:'rgba(219,39,119,0.8)', borderRadius:6, borderSkipped:false},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{max:100,min:0,grid:{color:'#f1f5f9'}},x:{grid:{display:false}}}}
+  });
+
+  // Table: each class
+  const classMap={};
+  recs.forEach(r=>{
+    const k=r.className;
+    if(!classMap[k]) classMap[k]={grade:r.grade,section:r.section,cycle:r.cycle,gender:recordGender(r),days:0,pSum:0,aSum:0,uSum:0,pctSum:0};
+    classMap[k].days++; classMap[k].pSum+=r.present||0; classMap[k].aSum+=r.authorizedAbsent||0;
+    classMap[k].uSum+=r.unauthorizedAbsent||0; classMap[k].pctSum+=r.attendancePct||0;
+  });
+
+  document.getElementById('tbody-gender').innerHTML = Object.entries(classMap)
+    .sort(([,a],[,b])=>a.grade.localeCompare(b.grade)||a.section.localeCompare(b.section))
+    .map(([cls,v])=>{
+      const rowStyle = v.gender==='male' ? 'background:#eff6ff' : 'background:#fdf2f8';
+      const pct = Math.round(v.pctSum/v.days);
+      const cl  = pct<70?'danger':pct<85?'gold':'green';
+      return `<tr style="${rowStyle}">
+        <td><strong>${cls}</strong></td><td>${v.grade}</td><td>${v.section}</td>
+        <td>${genderBadge(v.section)}</td><td>${v.cycle}</td>
+        <td>${v.days}</td><td>${v.pSum}</td><td>${v.aSum}</td><td>${v.uSum}</td>
+        <td>${badge(pct+'%',cl)}</td>
+      </tr>`;
+    }).join('')
+    || '<tr><td colspan="10" style="text-align:center;padding:30px;color:#94a3b8">No Middle/Higher data found</td></tr>';
 };
 
 // ── DELETE ────────────────────────────────────────────────────────
@@ -1161,6 +1442,42 @@ window.downloadTodayPDF = function() {
       }
     }
   });
+
+  // Gender breakdown section (Middle/Higher only)
+  const mR = recs.filter(r=>recordGender(r)==='male');
+  const fR = recs.filter(r=>recordGender(r)==='female');
+  if (mR.length || fR.length) {
+    const afterMain = pdoc.lastAutoTable.finalY + 10;
+    pdoc.setFontSize(10); pdoc.setFont('helvetica','bold'); pdoc.setTextColor(6,78,59);
+    pdoc.text('▌ Gender-wise Attendance (Middle & Higher)', 15, afterMain);
+    const gRows = [];
+    if (mR.length) {
+      const mP=mR.reduce((s,r)=>s+(r.present||0),0), mA=mR.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
+      const mU=mR.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
+      const mAvg=Math.round(mR.reduce((s,r)=>s+(r.attendancePct||0),0)/mR.length);
+      gRows.push(['♂ Male',mR.length,mP,mA,mU,mAvg+'%']);
+    }
+    if (fR.length) {
+      const fP=fR.reduce((s,r)=>s+(r.present||0),0), fA=fR.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
+      const fU=fR.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
+      const fAvg=Math.round(fR.reduce((s,r)=>s+(r.attendancePct||0),0)/fR.length);
+      gRows.push(['♀ Female',fR.length,fP,fA,fU,fAvg+'%']);
+    }
+    pdoc.autoTable({
+      startY: afterMain+5,
+      head:[['Gender','Classes','Total Present','Auth Absent','Unauth Absent','Avg Attendance %']],
+      body: gRows,
+      styles:{fontSize:9,cellPadding:3},
+      headStyles:{fillColor:[37,99,235],textColor:[255,255,255],fontStyle:'bold'},
+      columnStyles:{5:{halign:'center'}},
+      didParseCell:(data)=>{
+        if(data.section==='body'){
+          if(data.row.index===0) data.cell.styles.textColor=[30,58,138];
+          else data.cell.styles.textColor=[131,24,67];
+        }
+      }
+    });
+  }
 
   // Absent register page
   pdoc.addPage();
@@ -1389,6 +1706,8 @@ document.getElementById('f-absent-from').value = agoStr;
 document.getElementById('f-absent-to').value   = todayStr;
 document.getElementById('f-rec-from').value    = agoStr;
 document.getElementById('f-rec-to').value      = todayStr;
+document.getElementById('f-gender-from').value = agoStr;
+document.getElementById('f-gender-to').value   = todayStr;
 
 
 </script>
