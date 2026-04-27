@@ -1298,11 +1298,19 @@ window.renderGenderReport = function() {
     <div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff">
       <div class="num" style="color:#2563eb">${fmt(mP)}</div><div class="lbl">♂ Male Present</div></div>
     <div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff">
+      <div class="num" style="color:#2563eb">${fmt(mA)}</div><div class="lbl">♂ Male Auth Absent</div></div>
+    <div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff">
+      <div class="num" style="color:#2563eb">${fmt(mU)}</div><div class="lbl">♂ Male Unauth Absent</div></div>
+    <div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff">
       <div class="num" style="color:#2563eb">${mAvg}%</div><div class="lbl">♂ Male Avg %</div></div>
     <div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8">
       <div class="num" style="color:#db2777">${fRecs.length}</div><div class="lbl">♀ Female Classes</div></div>
     <div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8">
       <div class="num" style="color:#db2777">${fmt(fP)}</div><div class="lbl">♀ Female Present</div></div>
+    <div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8">
+      <div class="num" style="color:#db2777">${fmt(fA)}</div><div class="lbl">♀ Female Auth Absent</div></div>
+    <div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8">
+      <div class="num" style="color:#db2777">${fmt(fU)}</div><div class="lbl">♀ Female Unauth Absent</div></div>
     <div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8">
       <div class="num" style="color:#db2777">${fAvg}%</div><div class="lbl">♀ Female Avg %</div></div>
   `;
@@ -1343,7 +1351,7 @@ window.renderGenderReport = function() {
     classMap[k].uSum+=r.unauthorizedAbsent||0; classMap[k].pctSum+=r.attendancePct||0;
   });
 
-  document.getElementById('tbody-gender').innerHTML = Object.entries(classMap)
+  const classRows = Object.entries(classMap)
     .sort(([,a],[,b])=>a.grade.localeCompare(b.grade)||a.section.localeCompare(b.section))
     .map(([cls,v])=>{
       const rowStyle = v.gender==='male' ? 'background:#eff6ff' : 'background:#fdf2f8';
@@ -1355,8 +1363,37 @@ window.renderGenderReport = function() {
         <td>${v.days}</td><td>${v.pSum}</td><td>${v.aSum}</td><td>${v.uSum}</td>
         <td>${badge(pct+'%',cl)}</td>
       </tr>`;
-    }).join('')
-    || '<tr><td colspan="10" style="text-align:center;padding:30px;color:#94a3b8">No Middle/Higher data found</td></tr>';
+    }).join('');
+
+  // Summary rows for Male and Female totals
+  const mTotalDays = Object.values(classMap).filter(v=>v.gender==='male').reduce((s,v)=>s+v.days,0);
+  const fTotalDays = Object.values(classMap).filter(v=>v.gender==='female').reduce((s,v)=>s+v.days,0);
+  const mPctAvg = mTotalDays ? Math.round(Object.values(classMap).filter(v=>v.gender==='male').reduce((s,v)=>s+v.pctSum,0)/mTotalDays) : 0;
+  const fPctAvg = fTotalDays ? Math.round(Object.values(classMap).filter(v=>v.gender==='female').reduce((s,v)=>s+v.pctSum,0)/fTotalDays) : 0;
+  const mCl = mPctAvg<70?'danger':mPctAvg<85?'gold':'green';
+  const fCl = fPctAvg<70?'danger':fPctAvg<85?'gold':'green';
+
+  const summaryRows = (mRecs.length || fRecs.length) ? `
+    <tr style="background:#1e3a8a;color:white;font-weight:700;border-top:3px solid #2563eb">
+      <td colspan="2"><strong>♂ Male Total</strong></td>
+      <td>—</td>
+      <td><span class="gender-badge-m" style="background:rgba(255,255,255,0.2);color:white">♂ Male</span></td>
+      <td>—</td>
+      <td>${mTotalDays}</td><td>${fmt(mP)}</td><td>${fmt(mA)}</td><td>${fmt(mU)}</td>
+      <td><span class="badge" style="background:rgba(255,255,255,0.2);color:white">${mAvg}%</span></td>
+    </tr>
+    <tr style="background:#831843;color:white;font-weight:700;border-top:3px solid #db2777">
+      <td colspan="2"><strong>♀ Female Total</strong></td>
+      <td>—</td>
+      <td><span class="gender-badge-f" style="background:rgba(255,255,255,0.2);color:white">♀ Female</span></td>
+      <td>—</td>
+      <td>${fTotalDays}</td><td>${fmt(fP)}</td><td>${fmt(fA)}</td><td>${fmt(fU)}</td>
+      <td><span class="badge" style="background:rgba(255,255,255,0.2);color:white">${fAvg}%</span></td>
+    </tr>` : '';
+
+  document.getElementById('tbody-gender').innerHTML = classRows
+    ? classRows + summaryRows
+    : '<tr><td colspan="10" style="text-align:center;padding:30px;color:#94a3b8">No Middle/Higher data found</td></tr>';
 };
 
 // ── DELETE ────────────────────────────────────────────────────────
