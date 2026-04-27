@@ -488,7 +488,7 @@ tbody td { padding: 10px 13px; }
     <div class="gender-check-group">
       <label class="gender-check male checked" id="lbl-male">
         <input type="checkbox" id="chk-male" checked onchange="onGenderChange()"/>
-        ♂ Male (AB, BB, CB, DB…)
+        ♂ Male (AB, BB, CB, DB… + BC, BD)
       </label>
       <label class="gender-check female checked" id="lbl-female">
         <input type="checkbox" id="chk-female" checked onchange="onGenderChange()"/>
@@ -824,13 +824,14 @@ const CHARTS = {};
 let ACTIVE_CYCLE = '';
 
 // ── Gender helpers ────────────────────────────────────────────────
-// Male sections end with B (AB,BB,CB,DB,…) Female end with G (AG,BG,CG,DG,…)
+// Male sections end with B (AB,BB,CB,DB,…) OR are BC/BD. Female end with G (AG,BG,CG,DG,…)
 const GENDERED_CYCLES = ['Middle','Higher'];
 
 function sectionGender(section) {
   if (!section) return null;
   const s = section.toUpperCase();
   if (/B$/.test(s)) return 'male';
+  if (s === 'BC' || s === 'BD') return 'male';
   if (/G$/.test(s)) return 'female';
   return null; // primary/KG sections have no gender split
 }
