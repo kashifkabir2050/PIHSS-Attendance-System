@@ -340,6 +340,56 @@ body::before {
 /* ── Class preview ─── */
 #class-preview { margin-top: 10px; }
 
+/* ── Previous record panel ─── */
+#prev-record-panel {
+  border: 2px solid transparent;
+  transition: border-color .3s, background .3s;
+}
+#prev-record-panel.found {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+#prev-record-panel.not-found {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+.prev-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.prev-record-banner {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px; border-radius: var(--r-sm);
+  font-size: .9rem; font-weight: 600;
+  margin-bottom: 14px;
+}
+.prev-record-banner.submitted {
+  background: #dcfce7; color: #14532d;
+  border: 1.5px solid #86efac;
+}
+.prev-record-banner.not-submitted {
+  background: #fef9c3; color: #713f12;
+  border: 1.5px solid #fde047;
+}
+.prev-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px; margin-top: 12px;
+}
+.prev-detail-item {
+  background: white; border: 1px solid var(--border-soft);
+  border-radius: var(--r-sm); padding: 10px 14px;
+}
+.prev-detail-item .lbl {
+  font-size: .68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .6px; color: var(--ink-soft); margin-bottom: 4px;
+}
+.prev-detail-item .val {
+  font-size: .92rem; font-weight: 700; color: var(--ink);
+}
+
 /* ── Responsive ─── */
 @media (max-width: 640px) {
   .header-inner { flex-wrap: wrap; }
@@ -565,6 +615,14 @@ body::before {
     </div>
   </div>
 
+  <!-- SECTION 5b — PREVIOUS RECORD CHECK -->
+  <div id="prev-record-panel" style="display:none;" class="card" id="prev-record-panel">
+    <div class="card-title"><span class="icon">🔍</span> Previous Record Check
+      <small style="font-weight:400;color:var(--ink-soft);font-size:.8rem;margin-left:4px;" id="prev-record-label"></small>
+    </div>
+    <div id="prev-record-content"></div>
+  </div>
+
   <!-- SECTION 6 — TEACHER -->
   <div class="card">
     <div class="card-title"><span class="icon">👩‍🏫</span> Class Teacher</div>
@@ -584,7 +642,7 @@ body::before {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
-import { getFirestore, collection, addDoc, Timestamp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD3EputWhUMKuXTgYSXy5RUyPdL9xxgBl4",
@@ -607,9 +665,9 @@ document.getElementById('today-display').textContent =
   now.toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
 
 updateDay();
-dateEl.addEventListener('change', updateDay);
-document.getElementById('grade').addEventListener('change', updateClassBadge);
-document.getElementById('section').addEventListener('change', updateClassBadge);
+dateEl.addEventListener('change', () => { updateDay(); checkPreviousRecord(); });
+document.getElementById('grade').addEventListener('change', () => { updateClassBadge(); checkPreviousRecord(); });
+document.getElementById('section').addEventListener('change', () => { updateClassBadge(); checkPreviousRecord(); });
 ['total-students','auth-absent','unauth-absent'].forEach(id =>
   document.getElementById(id).addEventListener('input', recalculate));
 
@@ -662,6 +720,129 @@ function toast(msg, type='success') {
   const t = document.createElement('div');
   t.className = `toast ${type}`; t.textContent = msg; c.appendChild(t);
   setTimeout(() => t.remove(), 3500);
+}
+
+// ── Previous record checker ──────────────────────────────
+let checkTimer = null;
+async function checkPreviousRecord() {
+  const dateVal    = document.getElementById('date').value;
+  const gradeVal   = document.getElementById('grade').value;
+  const sectionVal = document.getElementById('section').value;
+  const panel      = document.getElementById('prev-record-panel');
+  const content    = document.getElementById('prev-record-content');
+  const labelEl    = document.getElementById('prev-record-label');
+
+  // Only check when all three fields are filled
+  if (!dateVal || !gradeVal || !sectionVal) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  // Don't check today — only past/future dates are "previous" checks
+  const today = new Date().toISOString().split('T')[0];
+
+  panel.style.display = 'block';
+  panel.className = 'card';
+  labelEl.textContent = `— checking ${gradeVal}–${sectionVal} on ${dateVal}…`;
+  content.innerHTML = `<div style="display:flex;align-items:center;gap:10px;color:var(--ink-soft);font-size:.88rem;">
+    <div class="spinner" style="width:24px;height:24px;border-width:3px;"></div> Searching records…
+  </div>`;
+
+  // Debounce rapid changes
+  clearTimeout(checkTimer);
+  checkTimer = setTimeout(async () => {
+    try {
+      const q = query(
+        collection(db, 'attendance'),
+        where('date',    '==', dateVal),
+        where('grade',   '==', gradeVal),
+        where('section', '==', sectionVal)
+      );
+      const snap = await getDocs(q);
+
+      if (!snap.empty) {
+        // Record found — show its data
+        const rec = snap.docs[0].data();
+        panel.className = 'card found';
+        labelEl.textContent = `— for ${gradeVal}–${sectionVal} on ${dateVal}`;
+
+        const pct     = rec.attendancePct ?? 0;
+        const barColor = pct >= 85 ? 'var(--emerald)' : pct >= 70 ? 'var(--gold)' : 'var(--ruby)';
+        const submittedTime = rec.submittedAt?.toDate
+          ? rec.submittedAt.toDate().toLocaleString('en-GB', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})
+          : 'Unknown';
+
+        content.innerHTML = `
+          <div class="prev-record-banner submitted">
+            ✅ Attendance already submitted for <strong>${gradeVal}–${sectionVal}</strong> on <strong>${dateVal}</strong>
+          </div>
+          <div class="prev-stats-row">
+            <div class="stat-box green" style="padding:14px;">
+              <div class="num" style="font-size:1.8rem;">${rec.present ?? '—'}</div>
+              <div class="lbl">Present</div>
+            </div>
+            <div class="stat-box gold" style="padding:14px;">
+              <div class="num" style="font-size:1.8rem;">${rec.authorizedAbsent ?? '—'}</div>
+              <div class="lbl">Auth Absent</div>
+            </div>
+            <div class="stat-box danger" style="padding:14px;">
+              <div class="num" style="font-size:1.8rem;">${rec.unauthorizedAbsent ?? '—'}</div>
+              <div class="lbl">Unauth Absent</div>
+            </div>
+            <div class="stat-box info" style="padding:14px;">
+              <div class="num" style="font-size:1.8rem;">${rec.totalStudents ?? '—'}</div>
+              <div class="lbl">Total</div>
+            </div>
+          </div>
+          <div style="margin-bottom:8px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:.82rem;font-weight:700;color:var(--ink-soft);">Attendance Rate</span>
+              <span style="font-weight:800;color:${barColor};font-size:1rem;">${pct}%</span>
+            </div>
+            <div class="progress-wrap">
+              <div style="height:100%;width:${pct}%;background:${barColor};border-radius:20px;transition:width .4s;"></div>
+            </div>
+          </div>
+          <div class="prev-detail-grid">
+            <div class="prev-detail-item">
+              <div class="lbl">Class Teacher</div>
+              <div class="val">👩‍🏫 ${rec.teacherName || '—'}</div>
+            </div>
+            <div class="prev-detail-item">
+              <div class="lbl">Cycle</div>
+              <div class="val">📚 ${rec.cycle || '—'}</div>
+            </div>
+            <div class="prev-detail-item">
+              <div class="lbl">Day</div>
+              <div class="val">📅 ${rec.day || '—'}</div>
+            </div>
+            <div class="prev-detail-item">
+              <div class="lbl">Submitted At</div>
+              <div class="val" style="font-size:.82rem;">🕐 ${submittedTime}</div>
+            </div>
+            ${rec.authNames ? `<div class="prev-detail-item" style="grid-column:1/-1;">
+              <div class="lbl">Authorized Absent Names</div>
+              <div class="val" style="font-weight:500;font-size:.87rem;">🟡 ${rec.authNames}</div>
+            </div>` : ''}
+            ${rec.unauthNames ? `<div class="prev-detail-item" style="grid-column:1/-1;">
+              <div class="lbl">Unauthorized Absent Names</div>
+              <div class="val" style="font-weight:500;font-size:.87rem;">🔴 ${rec.unauthNames}</div>
+            </div>` : ''}
+          </div>`;
+      } else {
+        // No record found
+        panel.className = 'card not-found';
+        labelEl.textContent = `— for ${gradeVal}–${sectionVal} on ${dateVal}`;
+        content.innerHTML = `
+          <div class="prev-record-banner not-submitted">
+            ⚠️ No attendance record found for <strong>${gradeVal}–${sectionVal}</strong> on <strong>${dateVal}</strong>.
+            ${dateVal === today ? 'You can submit it using this form.' : 'This date has not been submitted yet.'}
+          </div>`;
+      }
+    } catch (err) {
+      panel.style.display = 'none';
+    }
+  }, 600);
 }
 
 window.submitAttendance = async function() {
@@ -720,7 +901,7 @@ window.clearForm = function() {
   document.getElementById('cycle').value = '';
   document.querySelectorAll('.cycle-tab').forEach(t => t.classList.remove('active'));
   dateEl.value = new Date().toISOString().split('T')[0];
-  updateDay(); recalculate();
+  updateDay(); recalculate(); checkPreviousRecord();
   document.getElementById('class-preview').style.display = 'none';
 };
 
