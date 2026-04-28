@@ -501,7 +501,7 @@ body::before {
             <option value="2">Grade 2</option>
             <option value="3">Grade 3</option>
             <option value="4">Grade 4</option>
-            <option value="5">Grade 5</option>
+            <option value="5">Grade 5 ★ Gender Sections</option>
           </optgroup>
           <optgroup label="Middle (6–8)">
             <option value="6">Grade 6</option>
@@ -519,25 +519,13 @@ body::before {
       <div class="form-group">
         <label>Section <span style="color:var(--ruby)">*</span></label>
         <select id="section" required>
-          <option value="">— Select Section —</option>
-          <option value="A">A</option>
-          <option value="B">B</option>
-          <option value="C">C</option>
-          <option value="D">D</option>
-          <option value="E">E</option>
-          <option value="F">F</option>
-          <option value="AB">AB</option>
-          <option value="BB">BB</option>
-          <option value="BC">BC</option>
-          <option value="BD">BD</option>
-          <option value="AG">AG</option>
-          <option value="BG">BG</option>
-          <option value="CG">CG</option>
-          <option value="DG">DG</option>
+          <option value="">— Select Grade First —</option>
         </select>
       </div>
     </div>
-    <div id="class-preview" style="display:none; margin-top:12px;">
+    <!-- Gender info note shown dynamically -->
+    <div id="gender-info-note" style="display:none; margin-top:12px; padding:10px 14px; border-radius:8px; font-size:.82rem; font-weight:600;"></div>
+    <div id="class-preview" style="display:none; margin-top:10px;">
       <span class="badge badge-green" id="class-badge" style="font-size:.88rem; padding:6px 16px;"></span>
     </div>
   </div>
@@ -659,6 +647,126 @@ const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Satur
 const dateEl = document.getElementById('date');
 dateEl.value = new Date().toISOString().split('T')[0];
 
+// ── Section definitions per grade type ──────────────────────────────────────
+// KG 1, KG 2, Grade 1–4 → Mixed sections A–F (no gender)
+// Grade 5 → Gender-split: male (AB,BB,BC,BD) + female (AG,BG,CG,DG)  [Primary cycle]
+// Grade 6–12 → Gender-split: male (AB,BB,CB,DB,BC,BD) + female (AG,BG,CG,DG)
+
+const SECTION_MAP = {
+  'mixed': [
+    { value:'A', label:'A — Mixed' },
+    { value:'B', label:'B — Mixed' },
+    { value:'C', label:'C — Mixed' },
+    { value:'D', label:'D — Mixed' },
+    { value:'E', label:'E — Mixed' },
+    { value:'F', label:'F — Mixed' },
+  ],
+  'grade5': [
+    { value:'AB', label:'AB — ♂ Male' },
+    { value:'BB', label:'BB — ♂ Male' },
+    { value:'BC', label:'BC — ♂ Male' },
+    { value:'BD', label:'BD — ♂ Male' },
+    { value:'AG', label:'AG — ♀ Female' },
+    { value:'BG', label:'BG — ♀ Female' },
+    { value:'CG', label:'CG — ♀ Female' },
+    { value:'DG', label:'DG — ♀ Female' },
+  ],
+  'gendered': [
+    { value:'AB', label:'AB — ♂ Male' },
+    { value:'BB', label:'BB — ♂ Male' },
+    { value:'CB', label:'CB — ♂ Male' },
+    { value:'DB', label:'DB — ♂ Male' },
+    { value:'BC', label:'BC — ♂ Male' },
+    { value:'BD', label:'BD — ♂ Male' },
+    { value:'AG', label:'AG — ♀ Female' },
+    { value:'BG', label:'BG — ♀ Female' },
+    { value:'CG', label:'CG — ♀ Female' },
+    { value:'DG', label:'DG — ♀ Female' },
+  ]
+};
+
+function gradeType(grade) {
+  if (['KG 1','KG 2','1','2','3','4'].includes(grade)) return 'mixed';
+  if (grade === '5') return 'grade5';
+  return 'gendered';
+}
+
+// Determine gender of a section given the grade context
+function sectionGender(section, grade) {
+  if (!section || !grade) return null;
+  const type = gradeType(grade);
+  if (type === 'mixed') return 'mixed'; // no gender split
+  const s = section.toUpperCase();
+  if (/G$/.test(s)) return 'female';
+  if (/B$/.test(s) || s === 'BC' || s === 'BD') return 'male';
+  return null;
+}
+
+// Populate the section dropdown based on selected grade
+function populateSections(grade) {
+  const sel = document.getElementById('section');
+  sel.innerHTML = '';
+  if (!grade) {
+    sel.innerHTML = '<option value="">— Select Grade First —</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">— Select Section —</option>';
+  const type = gradeType(grade);
+  const sections = SECTION_MAP[type] || SECTION_MAP['mixed'];
+  sections.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.value;
+    opt.textContent = s.label;
+    sel.appendChild(opt);
+  });
+  updateGenderNote(grade, '');
+}
+
+function updateGenderNote(grade, section) {
+  const noteEl = document.getElementById('gender-info-note');
+  const type = gradeType(grade);
+  if (type === 'mixed') {
+    noteEl.style.display = 'block';
+    noteEl.style.background = '#eff6ff';
+    noteEl.style.border = '1.5px solid #bfdbfe';
+    noteEl.style.color = '#1e3a8a';
+    noteEl.innerHTML = '👥 <strong>Mixed Class</strong> — This grade has mixed (male & female) sections. No gender split tracked.';
+  } else if (section) {
+    const g = sectionGender(section, grade);
+    if (g === 'male') {
+      noteEl.style.display = 'block';
+      noteEl.style.background = '#eff6ff';
+      noteEl.style.border = '1.5px solid #93c5fd';
+      noteEl.style.color = '#1e3a8a';
+      noteEl.innerHTML = '♂ <strong>Male Section</strong> — Section <strong>' + section + '</strong> is a male (boys) class.';
+    } else if (g === 'female') {
+      noteEl.style.display = 'block';
+      noteEl.style.background = '#fdf2f8';
+      noteEl.style.border = '1.5px solid #f9a8d4';
+      noteEl.style.color = '#831843';
+      noteEl.innerHTML = '♀ <strong>Female Section</strong> — Section <strong>' + section + '</strong> is a female (girls) class.';
+    } else {
+      noteEl.style.display = 'none';
+    }
+  } else {
+    if (type === 'grade5') {
+      noteEl.style.display = 'block';
+      noteEl.style.background = '#f0fdf4';
+      noteEl.style.border = '1.5px solid #bbf7d0';
+      noteEl.style.color = '#065f46';
+      noteEl.innerHTML = '⭐ <strong>Grade 5</strong> — Select a section: <span style="color:#1e3a8a">AB, BB, BC, BD = ♂ Male</span> &nbsp;|&nbsp; <span style="color:#831843">AG, BG, CG, DG = ♀ Female</span>';
+    } else if (type === 'gendered') {
+      noteEl.style.display = 'block';
+      noteEl.style.background = '#f0fdf4';
+      noteEl.style.border = '1.5px solid #bbf7d0';
+      noteEl.style.color = '#065f46';
+      noteEl.innerHTML = '⭐ Select a section: <span style="color:#1e3a8a">AB/BB/CB/DB/BC/BD = ♂ Male</span> &nbsp;|&nbsp; <span style="color:#831843">AG/BG/CG/DG = ♀ Female</span>';
+    } else {
+      noteEl.style.display = 'none';
+    }
+  }
+}
+
 // Today display
 const now = new Date();
 document.getElementById('today-display').textContent =
@@ -666,10 +774,24 @@ document.getElementById('today-display').textContent =
 
 updateDay();
 dateEl.addEventListener('change', () => { updateDay(); checkPreviousRecord(); });
-document.getElementById('grade').addEventListener('change', () => { updateClassBadge(); checkPreviousRecord(); });
-document.getElementById('section').addEventListener('change', () => { updateClassBadge(); checkPreviousRecord(); });
+document.getElementById('grade').addEventListener('change', () => {
+  const g = document.getElementById('grade').value;
+  populateSections(g);
+  updateClassBadge();
+  checkPreviousRecord();
+});
+document.getElementById('section').addEventListener('change', () => {
+  const g = document.getElementById('grade').value;
+  const s = document.getElementById('section').value;
+  updateGenderNote(g, s);
+  updateClassBadge();
+  checkPreviousRecord();
+});
 ['total-students','auth-absent','unauth-absent'].forEach(id =>
   document.getElementById(id).addEventListener('input', recalculate));
+
+// Initialise section dropdown
+populateSections('');
 
 function updateDay() {
   const d = new Date(dateEl.value + 'T00:00:00');
@@ -682,7 +804,9 @@ function updateClassBadge() {
   const preview = document.getElementById('class-preview');
   const badge   = document.getElementById('class-badge');
   if (g && s) {
-    badge.textContent = `✅ Class: ${g}–${s} (${document.getElementById('cycle').value || 'No Cycle'})`;
+    const gLabel = sectionGender(s, g);
+    const gTag = gLabel === 'male' ? ' ♂ Male' : gLabel === 'female' ? ' ♀ Female' : ' 👥 Mixed';
+    badge.textContent = `✅ Class: ${g}–${s} (${document.getElementById('cycle').value || 'No Cycle'})${gTag}`;
     preview.style.display = 'block';
   } else {
     preview.style.display = 'none';
@@ -869,6 +993,7 @@ window.submitAttendance = async function() {
     day:  document.getElementById('day').value,
     cycle: document.getElementById('cycle').value,
     grade, section, className: `${grade}${section}`,
+    gender: sectionGender(section, grade) || 'mixed',
     totalStudents: total,
     authorizedAbsent: auth,
     unauthorizedAbsent: unauth,
@@ -901,8 +1026,10 @@ window.clearForm = function() {
   document.getElementById('cycle').value = '';
   document.querySelectorAll('.cycle-tab').forEach(t => t.classList.remove('active'));
   dateEl.value = new Date().toISOString().split('T')[0];
+  populateSections('');
   updateDay(); recalculate(); checkPreviousRecord();
   document.getElementById('class-preview').style.display = 'none';
+  document.getElementById('gender-info-note').style.display = 'none';
 };
 
 recalculate();

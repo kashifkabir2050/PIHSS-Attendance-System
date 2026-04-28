@@ -482,20 +482,20 @@ tbody td { padding: 10px 13px; }
     </div>
   </div>
 
-  <!-- ════════════ GENDER FILTER (Middle & Higher only) ════════════ -->
+  <!-- ════════════ GENDER FILTER ════════════ -->
   <div class="gender-filter-bar" id="gender-filter-bar" style="display:none">
     <span class="gender-filter-label">⚥ Gender Filter</span>
     <div class="gender-check-group">
       <label class="gender-check male checked" id="lbl-male">
         <input type="checkbox" id="chk-male" checked onchange="onGenderChange()"/>
-        ♂ Male (AB, BB, CB, DB… + BC, BD)
+        ♂ Male (AB, BB, CB, DB, BC, BD)
       </label>
       <label class="gender-check female checked" id="lbl-female">
         <input type="checkbox" id="chk-female" checked onchange="onGenderChange()"/>
-        ♀ Female (AG, BG, CG, DG…)
+        ♀ Female (AG, BG, CG, DG)
       </label>
     </div>
-    <span class="gender-note">Middle &amp; Higher sections only</span>
+    <span class="gender-note">Grade 5, Middle &amp; Higher | KG &amp; Grade 1–4 = 👥 Mixed</span>
   </div>
 
   <!-- ════════════ TIME PERIOD TABS ════════════ -->
@@ -690,7 +690,7 @@ tbody td { padding: 10px 13px; }
         <label>Gender</label>
         <select id="f-absent-gender">
           <option value="">All Genders</option>
-          <option value="male">♂ Male (AB/BB/CB/DB)</option>
+          <option value="male">♂ Male (AB/BB/CB/DB/BC/BD)</option>
           <option value="female">♀ Female (AG/BG/CG/DG)</option>
         </select>
       </div>
@@ -787,7 +787,7 @@ tbody td { padding: 10px 13px; }
         <div class="chart-container"><canvas id="chart-gender-grade"></canvas></div>
       </div>
     </div>
-    <div class="section-heading">⚥ Gender-wise Class Report (Middle &amp; Higher)</div>
+    <div class="section-heading">⚥ Gender-wise Class Report (Grade 5, Middle &amp; Higher)</div>
     <div class="card">
       <div class="table-wrap">
         <table>
@@ -823,25 +823,41 @@ let ALL_RECORDS = [];
 const CHARTS = {};
 let ACTIVE_CYCLE = '';
 
-// ── Gender helpers ────────────────────────────────────────────────
-// Male sections end with B (AB,BB,CB,DB,…) OR are BC/BD. Female end with G (AG,BG,CG,DG,…)
-const GENDERED_CYCLES = ['Middle','Higher'];
 
-function sectionGender(section) {
+// ── Gender helpers ────────────────────────────────────────────────
+// KG 1, KG 2, Grade 1–4 : sections A–F → Mixed (no gender)
+// Grade 5 (Primary)     : AB,BB,BC,BD → Male | AG,BG,CG,DG → Female
+// Grade 6–12 (Middle/Higher): AB,BB,CB,DB,BC,BD → Male | AG,BG,CG,DG → Female
+// Single-letter sections (A–F) → always Mixed regardless of cycle
+
+// Grades whose sections are gender-split (includes Grade 5 in Primary)
+const MIXED_GRADES  = ['KG 1','KG 2','1','2','3','4']; // always mixed
+const GRADE5_GENDERED = '5';
+
+function sectionGender(section, grade) {
   if (!section) return null;
   const s = section.toUpperCase();
-  if (/B$/.test(s)) return 'male';
-  if (s === 'BC' || s === 'BD') return 'male';
+  // Single-letter A–F → always mixed
+  if (/^[A-F]$/.test(s)) return null;
+  // KG and grades 1-4 → mixed regardless of section name
+  if (grade && MIXED_GRADES.includes(String(grade))) return null;
+  // Grade 5, Middle, Higher: B-ending or BC/BD = male; G-ending = female
   if (/G$/.test(s)) return 'female';
-  return null; // primary/KG sections have no gender split
+  if (/B$/.test(s) || s === 'BC' || s === 'BD') return 'male';
+  return null;
 }
 
-function recordGender(r) { return sectionGender(r.section); }
+function recordGender(r) {
+  // Prefer stored gender field (new records); fall back to section inference
+  if (r.gender && r.gender !== 'mixed') return r.gender;
+  return sectionGender(r.section, r.grade);
+}
 
 // Returns true when this record should pass the global gender checkbox filter
 function passesGenderFilter(r) {
-  // Only apply gender filter for Middle/Higher
-  if (!GENDERED_CYCLES.includes(r.cycle)) return true;
+  // Only apply gender filter for Grade 5 + Middle/Higher (gendered grades)
+  const grade = String(r.grade || '');
+  if (MIXED_GRADES.includes(grade)) return true; // always show KG/G1-4
   const g = recordGender(r);
   if (!g) return true; // section not gendered — always show
   const chkM = document.getElementById('chk-male')?.checked ?? true;
@@ -855,19 +871,23 @@ function filterByCycleAndGender(records) {
   return filterByCycle(records).filter(passesGenderFilter);
 }
 
-// Gender badge helper
-function genderBadge(section) {
-  const g = sectionGender(section);
+// Gender badge helper (needs grade for proper classification)
+function genderBadge(section, grade) {
+  const g = sectionGender(section, grade);
   if (g === 'male')   return '<span class="gender-badge-m">♂ Male</span>';
   if (g === 'female') return '<span class="gender-badge-f">♀ Female</span>';
+  // Single letter sections for mixed grades
+  if (/^[A-F]$/.test((section||'').toUpperCase())) return '<span style="color:#059669;font-size:.72rem;font-weight:700;background:#d1fae5;padding:2px 7px;border-radius:10px;">👥 Mixed</span>';
   return '<span style="color:#94a3b8;font-size:.72rem;">—</span>';
 }
 
-// Show/hide the gender filter bar based on active cycle
+// Show/hide the gender filter bar — show for All, Grade5, Middle, Higher
 function updateGenderBarVisibility() {
   const bar = document.getElementById('gender-filter-bar');
   if (!bar) return;
-  bar.style.display = (!ACTIVE_CYCLE || GENDERED_CYCLES.includes(ACTIVE_CYCLE)) ? 'flex' : 'none';
+  // Hide only for pure-mixed cycles (Kindergarten or Primary without Grade5 — but we show it for Primary too since G5 is there)
+  const hideFor = ['Kindergarten']; // Primary has grade 5 so keep visible
+  bar.style.display = (hideFor.includes(ACTIVE_CYCLE)) ? 'none' : 'flex';
 }
 
 window.onGenderChange = function() {
@@ -995,7 +1015,7 @@ window.renderDaily = function() {
   const totUnauth  = recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
   const avgPct     = recs.length ? Math.round(recs.reduce((s,r)=>s+(r.attendancePct||0),0)/recs.length) : 0;
 
-  // Gender breakdown for Middle/Higher
+  // Gender breakdown (Grade 5, Middle & Higher)
   const mRecs = recs.filter(r=>recordGender(r)==='male');
   const fRecs = recs.filter(r=>recordGender(r)==='female');
   const mPct  = mRecs.length ? Math.round(mRecs.reduce((s,r)=>s+(r.attendancePct||0),0)/mRecs.length) : null;
@@ -1018,7 +1038,7 @@ window.renderDaily = function() {
         const cl = pc<70?'danger':pc<85?'gold':'green';
         return `<tr>
           <td><strong>${r.className}</strong></td><td>${r.grade}</td><td>${r.section}</td>
-          <td>${genderBadge(r.section)}</td><td>${r.cycle}</td>
+          <td>${genderBadge(r.section, r.grade)}</td><td>${r.cycle}</td>
           <td>${r.totalStudents}</td><td>${r.present}</td><td>${r.authorizedAbsent}</td><td>${r.unauthorizedAbsent}</td>
           <td>${badge(pc+'%',cl)}</td><td>${r.teacherName}</td>
         </tr>`;
@@ -1113,7 +1133,7 @@ window.renderWeekly = function() {
   recs.forEach(r=>{const k=r.className;if(!classMap[k])classMap[k]={grade:r.grade,section:r.section,cycle:r.cycle,days:0,pSum:0,aSum:0,uSum:0,pctSum:0};classMap[k].days++;classMap[k].pSum+=r.present||0;classMap[k].aSum+=r.authorizedAbsent||0;classMap[k].uSum+=r.unauthorizedAbsent||0;classMap[k].pctSum+=r.attendancePct||0;});
   document.getElementById('tbody-weekly').innerHTML=Object.entries(classMap).map(([cls,v])=>`
     <tr><td><strong>${cls}</strong></td><td>${v.grade}</td><td>${v.section}</td>
-    <td>${genderBadge(v.section)}</td><td>${v.cycle}</td>
+    <td>${genderBadge(v.section, v.grade)}</td><td>${v.cycle}</td>
     <td>${v.days}</td><td>${Math.round(v.pSum/v.days)}</td><td>${Math.round(v.aSum/v.days)}</td>
     <td>${badge(Math.round(v.pctSum/v.days)+'%','green')}</td></tr>`).join('')
     ||'<tr><td colspan="9" style="text-align:center;padding:30px;color:#94a3b8">No data this week</td></tr>';
@@ -1165,7 +1185,7 @@ window.renderMonthly = function() {
   recs.forEach(r=>{const k=r.className;if(!classMap[k])classMap[k]={grade:r.grade,section:r.section,cycle:r.cycle,days:0,pSum:0,aSum:0,uSum:0,pctSum:0};classMap[k].days++;classMap[k].pSum+=r.present||0;classMap[k].aSum+=r.authorizedAbsent||0;classMap[k].uSum+=r.unauthorizedAbsent||0;classMap[k].pctSum+=r.attendancePct||0;});
   document.getElementById('tbody-monthly').innerHTML=Object.entries(classMap).map(([cls,v])=>`
     <tr><td><strong>${cls}</strong></td><td>${v.grade}</td><td>${v.section}</td>
-    <td>${genderBadge(v.section)}</td><td>${v.cycle}</td>
+    <td>${genderBadge(v.section, v.grade)}</td><td>${v.cycle}</td>
     <td>${v.days}</td><td>${Math.round(v.pSum/v.days)}</td><td>${v.aSum}</td><td>${v.uSum}</td>
     <td>${badge(Math.round(v.pctSum/v.days)+'%','green')}</td></tr>`).join('')
     ||'<tr><td colspan="10" style="text-align:center;padding:30px;color:#94a3b8">No data this month</td></tr>';
@@ -1273,8 +1293,8 @@ window.renderGenderReport = function() {
   const to    = document.getElementById('f-gender-to').value;
   const grade = document.getElementById('f-gender-grade').value;
 
-  // Only Middle & Higher sections with gendered sections
-  let recs = filterByCycle(ALL_RECORDS).filter(r => GENDERED_CYCLES.includes(r.cycle) && recordGender(r));
+  // Include Grade 5 (Primary) + Middle & Higher — all grades with gendered sections
+  let recs = filterByCycle(ALL_RECORDS).filter(r => !MIXED_GRADES.includes(String(r.grade||'')) && recordGender(r));
   if (from)  recs = recs.filter(r=>r.date>=from);
   if (to)    recs = recs.filter(r=>r.date<=to);
   if (grade) recs = recs.filter(r=>r.grade===grade);
@@ -1359,7 +1379,7 @@ window.renderGenderReport = function() {
       const cl  = pct<70?'danger':pct<85?'gold':'green';
       return `<tr style="${rowStyle}">
         <td><strong>${cls}</strong></td><td>${v.grade}</td><td>${v.section}</td>
-        <td>${genderBadge(v.section)}</td><td>${v.cycle}</td>
+        <td>${genderBadge(v.section, v.grade)}</td><td>${v.cycle}</td>
         <td>${v.days}</td><td>${v.pSum}</td><td>${v.aSum}</td><td>${v.uSum}</td>
         <td>${badge(pct+'%',cl)}</td>
       </tr>`;
@@ -1393,7 +1413,7 @@ window.renderGenderReport = function() {
 
   document.getElementById('tbody-gender').innerHTML = classRows
     ? classRows + summaryRows
-    : '<tr><td colspan="10" style="text-align:center;padding:30px;color:#94a3b8">No Middle/Higher data found</td></tr>';
+    : '<tr><td colspan="10" style="text-align:center;padding:30px;color:#94a3b8">No gender-split data found (Grade 5, Middle &amp; Higher only)</td></tr>';
 };
 
 // ── DELETE ────────────────────────────────────────────────────────
@@ -1481,13 +1501,13 @@ window.downloadTodayPDF = function() {
     }
   });
 
-  // Gender breakdown section (Middle/Higher only)
+  // Gender breakdown section (Grade 5, Middle & Higher)
   const mR = recs.filter(r=>recordGender(r)==='male');
   const fR = recs.filter(r=>recordGender(r)==='female');
   if (mR.length || fR.length) {
     const afterMain = pdoc.lastAutoTable.finalY + 10;
     pdoc.setFontSize(10); pdoc.setFont('helvetica','bold'); pdoc.setTextColor(6,78,59);
-    pdoc.text('▌ Gender-wise Attendance (Middle & Higher)', 15, afterMain);
+    pdoc.text('▌ Gender-wise Attendance (Grade 5, Middle & Higher)', 15, afterMain);
     const gRows = [];
     if (mR.length) {
       const mP=mR.reduce((s,r)=>s+(r.present||0),0), mA=mR.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
