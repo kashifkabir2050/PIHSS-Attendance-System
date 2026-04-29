@@ -491,7 +491,7 @@ tbody td { padding: 10px 13px; }
     <div class="gender-check-group">
       <label class="gender-check male checked" id="lbl-male">
         <input type="checkbox" id="chk-male" checked onchange="onGenderChange()"/>
-        ♂ Male (AB, BB, CB, DB, BC, BD)
+        ♂ Male (AB, BB, CB, DB)
       </label>
       <label class="gender-check female checked" id="lbl-female">
         <input type="checkbox" id="chk-female" checked onchange="onGenderChange()"/>
@@ -697,7 +697,7 @@ tbody td { padding: 10px 13px; }
         <label>Gender</label>
         <select id="f-absent-gender">
           <option value="">All Genders</option>
-          <option value="male">♂ Male (AB/BB/CB/DB/BC/BD)</option>
+          <option value="male">♂ Male (AB/BB/CB/DB)</option>
           <option value="female">♀ Female (AG/BG/CG/DG)</option>
           <option value="mixed">👥 Mixed (KG, Grade 1–4)</option>
         </select>
@@ -836,8 +836,8 @@ let ACTIVE_CYCLE = '';
 
 // ── Gender helpers ────────────────────────────────────────────────
 // KG 1, KG 2, Grade 1–4  → always Mixed (sections A–F, no gender split)
-// Grade 5 (Primary)       → AB,BB,BC,BD = Male | AG,BG,CG,DG = Female
-// Grade 6–12 (Mid/Higher) → AB,BB,CB,DB,BC,BD = Male | AG,BG,CG,DG = Female
+// Grade 5 (Primary)       → AB,BB,CB,DB = Male | AG,BG,CG,DG = Female
+// Grade 6–12 (Mid/Higher) → AB,BB,CB,DB = Male | AG,BG,CG,DG = Female
 // Single-letter A–F       → always Mixed regardless of cycle
 
 const MIXED_GRADES = ['KG 1','KG 2','1','2','3','4'];
@@ -851,7 +851,7 @@ function sectionGender(section, grade) {
   if (grade && MIXED_GRADES.includes(String(grade))) return null;
   // Grade 5, Middle, Higher: B-ending or BC/BD = male; G-ending = female
   if (/G$/.test(s)) return 'female';
-  if (/B$/.test(s) || s === 'BC' || s === 'BD') return 'male';
+  if (/B$/.test(s)) return 'male';
   return null;
 }
 
