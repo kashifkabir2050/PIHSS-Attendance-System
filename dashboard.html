@@ -369,10 +369,13 @@ tbody td { padding: 10px 13px; }
 .gender-check input { display: none; }
 .gender-check.male   { background: #dbeafe; color: #1e3a8a; border-color: #93c5fd; }
 .gender-check.female { background: #fce7f3; color: #831843; border-color: #f9a8d4; }
+.gender-check.mixed  { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
 .gender-check.male.checked   { background: #2563eb; color: white; border-color: #2563eb; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
 .gender-check.female.checked { background: #db2777; color: white; border-color: #db2777; box-shadow: 0 4px 12px rgba(219,39,119,0.3); }
+.gender-check.mixed.checked  { background: #059669; color: white; border-color: #059669; box-shadow: 0 4px 12px rgba(5,150,105,0.3); }
 .gender-badge-m { display:inline-block;padding:2px 8px;border-radius:12px;font-size:.7rem;font-weight:700;background:#dbeafe;color:#1e3a8a; }
 .gender-badge-f { display:inline-block;padding:2px 8px;border-radius:12px;font-size:.7rem;font-weight:700;background:#fce7f3;color:#831843; }
+.gender-badge-x { display:inline-block;padding:2px 8px;border-radius:12px;font-size:.7rem;font-weight:700;background:#d1fae5;color:#065f46; }
 .gender-note {
   font-size:.72rem;color:var(--ink-soft);
   background:white;border:1px solid #e2e8f0;border-radius:8px;
@@ -482,7 +485,7 @@ tbody td { padding: 10px 13px; }
     </div>
   </div>
 
-  <!-- ════════════ GENDER FILTER ════════════ -->
+  <!-- ════════════ GENDER FILTER (Middle & Higher only) ════════════ -->
   <div class="gender-filter-bar" id="gender-filter-bar" style="display:none">
     <span class="gender-filter-label">⚥ Gender Filter</span>
     <div class="gender-check-group">
@@ -494,8 +497,12 @@ tbody td { padding: 10px 13px; }
         <input type="checkbox" id="chk-female" checked onchange="onGenderChange()"/>
         ♀ Female (AG, BG, CG, DG)
       </label>
+      <label class="gender-check mixed checked" id="lbl-mixed">
+        <input type="checkbox" id="chk-mixed" checked onchange="onGenderChange()"/>
+        👥 Mixed (KG, Grade 1–4, A–F sections)
+      </label>
     </div>
-    <span class="gender-note">Grade 5, Middle &amp; Higher | KG &amp; Grade 1–4 = 👥 Mixed</span>
+    <span class="gender-note">Grade 5 + Middle &amp; Higher = gendered | KG &amp; Grade 1–4 = Mixed</span>
   </div>
 
   <!-- ════════════ TIME PERIOD TABS ════════════ -->
@@ -692,6 +699,7 @@ tbody td { padding: 10px 13px; }
           <option value="">All Genders</option>
           <option value="male">♂ Male (AB/BB/CB/DB/BC/BD)</option>
           <option value="female">♀ Female (AG/BG/CG/DG)</option>
+          <option value="mixed">👥 Mixed (KG, Grade 1–4)</option>
         </select>
       </div>
       <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="renderAbsent()">🔍 Filter</button>
@@ -740,6 +748,7 @@ tbody td { padding: 10px 13px; }
           <option value="">All Genders</option>
           <option value="male">♂ Male</option>
           <option value="female">♀ Female</option>
+          <option value="mixed">👥 Mixed</option>
         </select>
       </div>
       <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="renderRecords()">🔍 Filter</button>
@@ -776,29 +785,31 @@ tbody td { padding: 10px 13px; }
       </div>
       <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="renderGenderReport()">🔍 Filter</button>
     </div>
-    <div class="stats-row" id="gender-stats"></div>
+    <div class="stats-row" id="gender-stats" style="grid-template-columns:repeat(5,1fr)"></div>
     <div class="dash-grid">
       <div class="card">
-        <div class="card-title">♂ vs ♀ Avg Attendance %</div>
+        <div class="card-title">⚥ Total Students &amp; Attendance by Gender</div>
         <div class="chart-container"><canvas id="chart-gender-compare"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-title">📊 Grade-wise Gender Breakdown</div>
+        <div class="card-title">📊 Grade-wise Gender Avg Attendance %</div>
         <div class="chart-container"><canvas id="chart-gender-grade"></canvas></div>
       </div>
     </div>
-    <div class="section-heading">⚥ Gender-wise Class Report (Grade 5, Middle &amp; Higher)</div>
+    <div class="section-heading">🏫 Section-wise Report — All Grades (Male ♂ | Female ♀ | Mixed 👥)</div>
     <div class="card">
       <div class="table-wrap">
         <table>
           <thead><tr>
             <th>Class</th><th>Grade</th><th>Section</th><th>Gender</th><th>Cycle</th>
-            <th>Days</th><th>Total Present</th><th>Auth Absent</th><th>Unauth Absent</th><th>Avg Attendance %</th>
+            <th>Days</th><th>Avg Total Stu.</th><th>Total Present</th><th>Auth Absent</th><th>Unauth Absent</th><th>Avg Att %</th>
           </tr></thead>
           <tbody id="tbody-gender"></tbody>
         </table>
       </div>
     </div>
+    <!-- Cycle-wise and Grade-wise summaries injected here -->
+    <div id="gender-summary-extras"></div>
   </div>
 
 </main>
@@ -823,23 +834,20 @@ let ALL_RECORDS = [];
 const CHARTS = {};
 let ACTIVE_CYCLE = '';
 
-
 // ── Gender helpers ────────────────────────────────────────────────
-// KG 1, KG 2, Grade 1–4 : sections A–F → Mixed (no gender)
-// Grade 5 (Primary)     : AB,BB,BC,BD → Male | AG,BG,CG,DG → Female
-// Grade 6–12 (Middle/Higher): AB,BB,CB,DB,BC,BD → Male | AG,BG,CG,DG → Female
-// Single-letter sections (A–F) → always Mixed regardless of cycle
+// KG 1, KG 2, Grade 1–4  → always Mixed (sections A–F, no gender split)
+// Grade 5 (Primary)       → AB,BB,BC,BD = Male | AG,BG,CG,DG = Female
+// Grade 6–12 (Mid/Higher) → AB,BB,CB,DB,BC,BD = Male | AG,BG,CG,DG = Female
+// Single-letter A–F       → always Mixed regardless of cycle
 
-// Grades whose sections are gender-split (includes Grade 5 in Primary)
-const MIXED_GRADES  = ['KG 1','KG 2','1','2','3','4']; // always mixed
-const GRADE5_GENDERED = '5';
+const MIXED_GRADES = ['KG 1','KG 2','1','2','3','4'];
 
 function sectionGender(section, grade) {
   if (!section) return null;
   const s = section.toUpperCase();
-  // Single-letter A–F → always mixed
+  // Single letter A-F → mixed for all
   if (/^[A-F]$/.test(s)) return null;
-  // KG and grades 1-4 → mixed regardless of section name
+  // KG and Grades 1-4 → mixed
   if (grade && MIXED_GRADES.includes(String(grade))) return null;
   // Grade 5, Middle, Higher: B-ending or BC/BD = male; G-ending = female
   if (/G$/.test(s)) return 'female';
@@ -848,51 +856,46 @@ function sectionGender(section, grade) {
 }
 
 function recordGender(r) {
-  // Prefer stored gender field (new records); fall back to section inference
+  // Prefer stored gender field; fall back to section+grade inference
   if (r.gender && r.gender !== 'mixed') return r.gender;
   return sectionGender(r.section, r.grade);
 }
 
 // Returns true when this record should pass the global gender checkbox filter
 function passesGenderFilter(r) {
-  // Only apply gender filter for Grade 5 + Middle/Higher (gendered grades)
   const grade = String(r.grade || '');
-  if (MIXED_GRADES.includes(grade)) return true; // always show KG/G1-4
+  if (MIXED_GRADES.includes(grade)) return true; // KG/G1-4 always pass
   const g = recordGender(r);
-  if (!g) return true; // section not gendered — always show
+  if (!g) return true; // un-gendered section always passes
   const chkM = document.getElementById('chk-male')?.checked ?? true;
   const chkF = document.getElementById('chk-female')?.checked ?? true;
+  const chkX = document.getElementById('chk-mixed')?.checked ?? true;
   if (g === 'male')   return chkM;
   if (g === 'female') return chkF;
-  return true;
+  return chkX;
 }
 
 function filterByCycleAndGender(records) {
   return filterByCycle(records).filter(passesGenderFilter);
 }
 
-// Gender badge helper (needs grade for proper classification)
+// Gender badge helper (grade needed for correct classification)
 function genderBadge(section, grade) {
   const g = sectionGender(section, grade);
   if (g === 'male')   return '<span class="gender-badge-m">♂ Male</span>';
   if (g === 'female') return '<span class="gender-badge-f">♀ Female</span>';
-  // Single letter sections for mixed grades
-  if (/^[A-F]$/.test((section||'').toUpperCase())) return '<span style="color:#059669;font-size:.72rem;font-weight:700;background:#d1fae5;padding:2px 7px;border-radius:10px;">👥 Mixed</span>';
-  return '<span style="color:#94a3b8;font-size:.72rem;">—</span>';
+  return '<span class="gender-badge-x">👥 Mixed</span>';
 }
 
-// Show/hide the gender filter bar — show for All, Grade5, Middle, Higher
+// Show/hide gender filter bar — hide only for pure Kindergarten cycle
 function updateGenderBarVisibility() {
   const bar = document.getElementById('gender-filter-bar');
   if (!bar) return;
-  // Hide only for pure-mixed cycles (Kindergarten or Primary without Grade5 — but we show it for Primary too since G5 is there)
-  const hideFor = ['Kindergarten']; // Primary has grade 5 so keep visible
-  bar.style.display = (hideFor.includes(ACTIVE_CYCLE)) ? 'none' : 'flex';
+  bar.style.display = (ACTIVE_CYCLE === 'Kindergarten') ? 'none' : 'flex';
 }
 
 window.onGenderChange = function() {
-  // Sync label checked classes
-  ['male','female'].forEach(g => {
+  ['male','female','mixed'].forEach(g => {
     const chk = document.getElementById('chk-'+g);
     const lbl = document.getElementById('lbl-'+g);
     if (chk && lbl) lbl.classList.toggle('checked', chk.checked);
@@ -1010,25 +1013,36 @@ window.renderDaily = function() {
   let recs   = filterByCycleAndGender(ALL_RECORDS).filter(r => r.date === target);
   if (gradeEl.value) recs = recs.filter(r => r.grade === gradeEl.value);
 
+  const totStudents = recs.reduce((s,r)=>s+(r.totalStudents||0),0);
   const totPresent = recs.reduce((s,r)=>s+(r.present||0),0);
   const totAuth    = recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
   const totUnauth  = recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
   const avgPct     = recs.length ? Math.round(recs.reduce((s,r)=>s+(r.attendancePct||0),0)/recs.length) : 0;
 
-  // Gender breakdown (Grade 5, Middle & Higher)
+  // Gender breakdown
   const mRecs = recs.filter(r=>recordGender(r)==='male');
   const fRecs = recs.filter(r=>recordGender(r)==='female');
+  const xRecs = recs.filter(r=>!recordGender(r));
   const mPct  = mRecs.length ? Math.round(mRecs.reduce((s,r)=>s+(r.attendancePct||0),0)/mRecs.length) : null;
   const fPct  = fRecs.length ? Math.round(fRecs.reduce((s,r)=>s+(r.attendancePct||0),0)/fRecs.length) : null;
+  const xPct  = xRecs.length ? Math.round(xRecs.reduce((s,r)=>s+(r.attendancePct||0),0)/xRecs.length) : null;
+  const mT = mRecs.reduce((s,r)=>s+(r.totalStudents||0),0);
+  const fT = fRecs.reduce((s,r)=>s+(r.totalStudents||0),0);
+  const xT = xRecs.reduce((s,r)=>s+(r.totalStudents||0),0);
 
   document.getElementById('daily-stats').innerHTML = `
+    <div class="stat-box info" style="border-color:#a5b4fc;background:#eef2ff"><div class="num" style="color:#4338ca;font-size:1.6rem">${fmt(totStudents)}</div><div class="lbl">Total Students</div></div>
     <div class="stat-box green"><div class="num">${fmt(totPresent)}</div><div class="lbl">Present</div></div>
     <div class="stat-box gold"><div class="num">${fmt(totAuth)}</div><div class="lbl">Auth Absent</div></div>
     <div class="stat-box danger"><div class="num">${fmt(totUnauth)}</div><div class="lbl">Unauth Absent</div></div>
     <div class="stat-box info"><div class="num">${avgPct}%</div><div class="lbl">Avg Attendance</div></div>
     <div class="stat-box info"><div class="num">${recs.length}</div><div class="lbl">Classes Submitted</div></div>
-    ${mPct!==null?`<div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff"><div class="num" style="color:#2563eb">${mPct}%</div><div class="lbl">♂ Male Avg</div></div>`:''}
-    ${fPct!==null?`<div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8"><div class="num" style="color:#db2777">${fPct}%</div><div class="lbl">♀ Female Avg</div></div>`:''}
+    ${mPct!==null?`<div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff"><div class="num" style="color:#2563eb">${fmt(mT)}</div><div class="lbl">♂ Male Students</div></div>`:''}
+    ${mPct!==null?`<div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff"><div class="num" style="color:#2563eb">${mPct}%</div><div class="lbl">♂ Male Avg %</div></div>`:''}
+    ${fPct!==null?`<div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8"><div class="num" style="color:#db2777">${fmt(fT)}</div><div class="lbl">♀ Female Students</div></div>`:''}
+    ${fPct!==null?`<div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8"><div class="num" style="color:#db2777">${fPct}%</div><div class="lbl">♀ Female Avg %</div></div>`:''}
+    ${xPct!==null&&xRecs.length?`<div class="stat-box green" style="border-color:#6ee7b7"><div class="num" style="color:#059669">${fmt(xT)}</div><div class="lbl">👥 Mixed Students</div></div>`:''}
+    ${xPct!==null&&xRecs.length?`<div class="stat-box green" style="border-color:#6ee7b7"><div class="num" style="color:#059669">${xPct}%</div><div class="lbl">👥 Mixed Avg %</div></div>`:''}
   `;
 
   const tbody = document.getElementById('tbody-daily');
@@ -1095,14 +1109,23 @@ window.renderWeekly = function() {
   const DSHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   let recs = filterByCycleAndGender(ALL_RECORDS).filter(r=>days.includes(r.date));
 
+  const totT=recs.reduce((s,r)=>s+(r.totalStudents||0),0);
   const totP=recs.reduce((s,r)=>s+(r.present||0),0), totA=recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
   const totU=recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
   const avgPct=recs.length?Math.round(recs.reduce((s,r)=>s+(r.attendancePct||0),0)/recs.length):0;
+  const wmR=recs.filter(r=>recordGender(r)==='male'), wfR=recs.filter(r=>recordGender(r)==='female'), wxR=recs.filter(r=>!recordGender(r));
+  const wmPct=wmR.length?Math.round(wmR.reduce((s,r)=>s+(r.attendancePct||0),0)/wmR.length):null;
+  const wfPct=wfR.length?Math.round(wfR.reduce((s,r)=>s+(r.attendancePct||0),0)/wfR.length):null;
+  const wxPct=wxR.length?Math.round(wxR.reduce((s,r)=>s+(r.attendancePct||0),0)/wxR.length):null;
   document.getElementById('weekly-stats').innerHTML=`
+    <div class="stat-box info" style="border-color:#a5b4fc;background:#eef2ff"><div class="num" style="color:#4338ca;font-size:1.6rem">${fmt(totT)}</div><div class="lbl">Total Students</div></div>
     <div class="stat-box green"><div class="num">${fmt(totP)}</div><div class="lbl">Total Present</div></div>
     <div class="stat-box gold"><div class="num">${fmt(totA)}</div><div class="lbl">Auth Absent</div></div>
     <div class="stat-box danger"><div class="num">${fmt(totU)}</div><div class="lbl">Unauth Absent</div></div>
     <div class="stat-box info"><div class="num">${avgPct}%</div><div class="lbl">Avg Attendance</div></div>
+    ${wmPct!==null?`<div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff"><div class="num" style="color:#2563eb">${wmPct}%</div><div class="lbl">♂ Male Avg %</div></div>`:''}
+    ${wfPct!==null?`<div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8"><div class="num" style="color:#db2777">${wfPct}%</div><div class="lbl">♀ Female Avg %</div></div>`:''}
+    ${wxPct!==null&&wxR.length?`<div class="stat-box green" style="border-color:#6ee7b7"><div class="num" style="color:#059669">${wxPct}%</div><div class="lbl">👥 Mixed Avg %</div></div>`:''}
   `;
 
   makeChart('chart-weekly-trend',{
@@ -1146,14 +1169,23 @@ window.renderMonthly = function() {
   const month = mEl.value;
   let recs = filterByCycleAndGender(ALL_RECORDS).filter(r=>r.date&&r.date.startsWith(month));
 
+  const totT2=recs.reduce((s,r)=>s+(r.totalStudents||0),0);
   const totP=recs.reduce((s,r)=>s+(r.present||0),0),totA=recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
   const totU=recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
   const avgPct=recs.length?Math.round(recs.reduce((s,r)=>s+(r.attendancePct||0),0)/recs.length):0;
+  const mmR=recs.filter(r=>recordGender(r)==='male'), mfR=recs.filter(r=>recordGender(r)==='female'), mxR=recs.filter(r=>!recordGender(r));
+  const mmPct=mmR.length?Math.round(mmR.reduce((s,r)=>s+(r.attendancePct||0),0)/mmR.length):null;
+  const mfPct=mfR.length?Math.round(mfR.reduce((s,r)=>s+(r.attendancePct||0),0)/mfR.length):null;
+  const mxPct=mxR.length?Math.round(mxR.reduce((s,r)=>s+(r.attendancePct||0),0)/mxR.length):null;
   document.getElementById('monthly-stats').innerHTML=`
+    <div class="stat-box info" style="border-color:#a5b4fc;background:#eef2ff"><div class="num" style="color:#4338ca;font-size:1.6rem">${fmt(totT2)}</div><div class="lbl">Total Students</div></div>
     <div class="stat-box green"><div class="num">${fmt(totP)}</div><div class="lbl">Total Present</div></div>
     <div class="stat-box gold"><div class="num">${fmt(totA)}</div><div class="lbl">Auth Absent</div></div>
     <div class="stat-box danger"><div class="num">${fmt(totU)}</div><div class="lbl">Unauth Absent</div></div>
     <div class="stat-box info"><div class="num">${avgPct}%</div><div class="lbl">Avg Attendance</div></div>
+    ${mmPct!==null?`<div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff"><div class="num" style="color:#2563eb">${mmPct}%</div><div class="lbl">♂ Male Avg %</div></div>`:''}
+    ${mfPct!==null?`<div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8"><div class="num" style="color:#db2777">${mfPct}%</div><div class="lbl">♀ Female Avg %</div></div>`:''}
+    ${mxPct!==null&&mxR.length?`<div class="stat-box green" style="border-color:#6ee7b7"><div class="num" style="color:#059669">${mxPct}%</div><div class="lbl">👥 Mixed Avg %</div></div>`:''}
   `;
 
   const days=[...new Set(recs.map(r=>r.date))].sort();
@@ -1243,8 +1275,8 @@ window.renderAbsent = function() {
   if (to)     recs=recs.filter(r=>r.date<=to);
   if (grade)  recs=recs.filter(r=>r.grade===grade);
   if (gender) recs=recs.filter(r=>{
-    const g=recordGender(r);
-    return !g || g===gender; // non-gendered sections always pass
+    const g=recordGender(r) || 'mixed';
+    return g===gender;
   });
 
   const rows=[];
@@ -1255,7 +1287,11 @@ window.renderAbsent = function() {
   rows.sort((a,b)=>b.date.localeCompare(a.date));
 
   const auth=rows.filter(r=>r.type==='Authorized').length, unauth=rows.filter(r=>r.type==='Unauthorized').length;
+  const totStu=recs.reduce((s,r)=>s+(r.totalStudents||0),0);
+  const totPres=recs.reduce((s,r)=>s+(r.present||0),0);
   document.getElementById('absent-stats').innerHTML=`
+    <div class="stat-box info" style="border-color:#a5b4fc;background:#eef2ff"><div class="num" style="color:#4338ca;font-size:1.6rem">${fmt(totStu)}</div><div class="lbl">Total Students</div></div>
+    <div class="stat-box green"><div class="num">${fmt(totPres)}</div><div class="lbl">Total Present</div></div>
     <div class="stat-box gold"><div class="num">${auth}</div><div class="lbl">Authorized Absences</div></div>
     <div class="stat-box danger"><div class="num">${unauth}</div><div class="lbl">Unauthorized Absences</div></div>
     <div class="stat-box info"><div class="num">${rows.length}</div><div class="lbl">Total Entries</div></div>
@@ -1278,8 +1314,8 @@ window.renderRecords = function() {
   if (cycle)  recs=recs.filter(r=>r.cycle===cycle);
   if (grade)  recs=recs.filter(r=>r.grade===grade);
   if (gender) recs=recs.filter(r=>{
-    const g=recordGender(r);
-    return !g || g===gender;
+    const g=recordGender(r) || 'mixed';
+    return g===gender;
   });
 
   document.getElementById('tbody-records').innerHTML=recs.length
@@ -1293,127 +1329,226 @@ window.renderGenderReport = function() {
   const to    = document.getElementById('f-gender-to').value;
   const grade = document.getElementById('f-gender-grade').value;
 
-  // Include Grade 5 (Primary) + Middle & Higher — all grades with gendered sections
-  let recs = filterByCycle(ALL_RECORDS).filter(r => !MIXED_GRADES.includes(String(r.grade||'')) && recordGender(r));
+  // ALL records — male, female, and mixed — all cycles
+  let recs = filterByCycle(ALL_RECORDS);
   if (from)  recs = recs.filter(r=>r.date>=from);
   if (to)    recs = recs.filter(r=>r.date<=to);
   if (grade) recs = recs.filter(r=>r.grade===grade);
 
+  // Split by gender
   const mRecs = recs.filter(r=>recordGender(r)==='male');
   const fRecs = recs.filter(r=>recordGender(r)==='female');
+  const xRecs = recs.filter(r=>!recordGender(r)); // mixed / ungended
 
   const calcAvg = (arr) => arr.length ? Math.round(arr.reduce((s,r)=>s+(r.attendancePct||0),0)/arr.length) : 0;
   const calcP   = (arr) => arr.reduce((s,r)=>s+(r.present||0),0);
   const calcA   = (arr) => arr.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
   const calcU   = (arr) => arr.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
+  const calcT   = (arr) => arr.reduce((s,r)=>s+(r.totalStudents||0),0);
 
-  const mAvg=calcAvg(mRecs), fAvg=calcAvg(fRecs);
-  const mP=calcP(mRecs), fP=calcP(fRecs);
-  const mA=calcA(mRecs), fA=calcA(fRecs);
-  const mU=calcU(mRecs), fU=calcU(fRecs);
+  const mAvg=calcAvg(mRecs), fAvg=calcAvg(fRecs), xAvg=calcAvg(xRecs);
+  const mP=calcP(mRecs), fP=calcP(fRecs), xP=calcP(xRecs);
+  const mA=calcA(mRecs), fA=calcA(fRecs), xA=calcA(xRecs);
+  const mU=calcU(mRecs), fU=calcU(fRecs), xU=calcU(xRecs);
+  const mT=calcT(mRecs), fT=calcT(fRecs), xT=calcT(xRecs);
+  const allT=calcT(recs), allP=calcP(recs), allA=calcA(recs), allU=calcU(recs);
+  const allAvg=calcAvg(recs);
 
+  // ── Stats boxes ──
   document.getElementById('gender-stats').innerHTML = `
+    <!-- OVERALL -->
+    <div class="stat-box info" style="border-color:#a5b4fc;background:#eef2ff;grid-column:span 1">
+      <div class="num" style="color:#4338ca;font-size:1.6rem">${fmt(allT)}</div><div class="lbl">Total Students</div></div>
+    <div class="stat-box green">
+      <div class="num">${fmt(allP)}</div><div class="lbl">Total Present</div></div>
+    <div class="stat-box gold">
+      <div class="num">${fmt(allA)}</div><div class="lbl">Total Auth Absent</div></div>
+    <div class="stat-box danger">
+      <div class="num">${fmt(allU)}</div><div class="lbl">Total Unauth Absent</div></div>
+    <div class="stat-box info">
+      <div class="num">${allAvg}%</div><div class="lbl">Overall Avg %</div></div>
+
+    <!-- MALE -->
     <div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff">
-      <div class="num" style="color:#2563eb">${mRecs.length}</div><div class="lbl">♂ Male Classes</div></div>
+      <div class="num" style="color:#2563eb">${fmt(mT)}</div><div class="lbl">♂ Male Total Stu.</div></div>
     <div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff">
       <div class="num" style="color:#2563eb">${fmt(mP)}</div><div class="lbl">♂ Male Present</div></div>
     <div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff">
-      <div class="num" style="color:#2563eb">${fmt(mA)}</div><div class="lbl">♂ Male Auth Absent</div></div>
+      <div class="num" style="color:#2563eb">${fmt(mA)}</div><div class="lbl">♂ Male Auth Abs</div></div>
     <div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff">
-      <div class="num" style="color:#2563eb">${fmt(mU)}</div><div class="lbl">♂ Male Unauth Absent</div></div>
+      <div class="num" style="color:#2563eb">${fmt(mU)}</div><div class="lbl">♂ Male Unauth Abs</div></div>
     <div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff">
       <div class="num" style="color:#2563eb">${mAvg}%</div><div class="lbl">♂ Male Avg %</div></div>
+
+    <!-- FEMALE -->
     <div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8">
-      <div class="num" style="color:#db2777">${fRecs.length}</div><div class="lbl">♀ Female Classes</div></div>
+      <div class="num" style="color:#db2777">${fmt(fT)}</div><div class="lbl">♀ Female Total Stu.</div></div>
     <div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8">
       <div class="num" style="color:#db2777">${fmt(fP)}</div><div class="lbl">♀ Female Present</div></div>
     <div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8">
-      <div class="num" style="color:#db2777">${fmt(fA)}</div><div class="lbl">♀ Female Auth Absent</div></div>
+      <div class="num" style="color:#db2777">${fmt(fA)}</div><div class="lbl">♀ Female Auth Abs</div></div>
     <div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8">
-      <div class="num" style="color:#db2777">${fmt(fU)}</div><div class="lbl">♀ Female Unauth Absent</div></div>
+      <div class="num" style="color:#db2777">${fmt(fU)}</div><div class="lbl">♀ Female Unauth Abs</div></div>
     <div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8">
       <div class="num" style="color:#db2777">${fAvg}%</div><div class="lbl">♀ Female Avg %</div></div>
+
+    <!-- MIXED -->
+    <div class="stat-box green" style="border-color:#6ee7b7">
+      <div class="num" style="color:#059669">${fmt(xT)}</div><div class="lbl">👥 Mixed Total Stu.</div></div>
+    <div class="stat-box green" style="border-color:#6ee7b7">
+      <div class="num" style="color:#059669">${fmt(xP)}</div><div class="lbl">👥 Mixed Present</div></div>
+    <div class="stat-box green" style="border-color:#6ee7b7">
+      <div class="num" style="color:#059669">${fmt(xA)}</div><div class="lbl">👥 Mixed Auth Abs</div></div>
+    <div class="stat-box green" style="border-color:#6ee7b7">
+      <div class="num" style="color:#059669">${fmt(xU)}</div><div class="lbl">👥 Mixed Unauth Abs</div></div>
+    <div class="stat-box green" style="border-color:#6ee7b7">
+      <div class="num" style="color:#059669">${xAvg}%</div><div class="lbl">👥 Mixed Avg %</div></div>
   `;
 
-  // Chart: compare male vs female overall
+  // ── Chart 1: Total Students + Attendance % by gender ──
   makeChart('chart-gender-compare',{
     type:'bar',
     data:{
-      labels:['Present','Auth Absent','Unauth Absent','Avg Attendance %'],
+      labels:['Total Students','Present','Auth Absent','Unauth Absent','Avg Att %'],
       datasets:[
-        {label:'♂ Male',  data:[mP,mA,mU,mAvg], backgroundColor:'rgba(37,99,235,0.8)',  borderRadius:8, borderSkipped:false},
-        {label:'♀ Female',data:[fP,fA,fU,fAvg],  backgroundColor:'rgba(219,39,119,0.8)', borderRadius:8, borderSkipped:false},
+        {label:'♂ Male',  data:[mT,mP,mA,mU,mAvg], backgroundColor:'rgba(37,99,235,0.8)',  borderRadius:6, borderSkipped:false},
+        {label:'♀ Female',data:[fT,fP,fA,fU,fAvg],  backgroundColor:'rgba(219,39,119,0.8)', borderRadius:6, borderSkipped:false},
+        {label:'👥 Mixed', data:[xT,xP,xA,xU,xAvg],  backgroundColor:'rgba(5,150,105,0.8)',  borderRadius:6, borderSkipped:false},
       ]
     },
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{grid:{display:false}},y:{beginAtZero:true}}}
   });
 
-  // Chart: grade-wise breakdown
-  const grades=[...new Set(recs.map(r=>r.grade))].sort();
+  // ── Chart 2: Grade-wise breakdown (all 3 genders) ──
+  const grades=[...new Set(recs.map(r=>r.grade))].sort((a,b)=>{
+    const order=['KG 1','KG 2','1','2','3','4','5','6','7','8','9','10','11','12'];
+    return (order.indexOf(a)<0?99:order.indexOf(a)) - (order.indexOf(b)<0?99:order.indexOf(b));
+  });
+  const avgFor = (arr,g) => { const a=arr.filter(r=>r.grade===g); return a.length?Math.round(a.reduce((s,r)=>s+(r.attendancePct||0),0)/a.length):0; };
   makeChart('chart-gender-grade',{
     type:'bar',
     data:{
       labels:grades,
       datasets:[
-        {label:'♂ Male Avg %',  data:grades.map(g=>{const a=mRecs.filter(r=>r.grade===g);return a.length?Math.round(a.reduce((s,r)=>s+(r.attendancePct||0),0)/a.length):0;}), backgroundColor:'rgba(37,99,235,0.8)',  borderRadius:6, borderSkipped:false},
-        {label:'♀ Female Avg %',data:grades.map(g=>{const a=fRecs.filter(r=>r.grade===g);return a.length?Math.round(a.reduce((s,r)=>s+(r.attendancePct||0),0)/a.length):0;}), backgroundColor:'rgba(219,39,119,0.8)', borderRadius:6, borderSkipped:false},
+        {label:'♂ Male Avg %',  data:grades.map(g=>avgFor(mRecs,g)), backgroundColor:'rgba(37,99,235,0.8)',  borderRadius:5, borderSkipped:false},
+        {label:'♀ Female Avg %',data:grades.map(g=>avgFor(fRecs,g)), backgroundColor:'rgba(219,39,119,0.8)', borderRadius:5, borderSkipped:false},
+        {label:'👥 Mixed Avg %', data:grades.map(g=>avgFor(xRecs,g)), backgroundColor:'rgba(5,150,105,0.8)',  borderRadius:5, borderSkipped:false},
       ]
     },
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{max:100,min:0,grid:{color:'#f1f5f9'}},x:{grid:{display:false}}}}
   });
 
-  // Table: each class
+  // ── Section-wise summary table ──
+  // Build a classMap for ALL records (male + female + mixed)
   const classMap={};
   recs.forEach(r=>{
-    const k=r.className;
-    if(!classMap[k]) classMap[k]={grade:r.grade,section:r.section,cycle:r.cycle,gender:recordGender(r),days:0,pSum:0,aSum:0,uSum:0,pctSum:0};
-    classMap[k].days++; classMap[k].pSum+=r.present||0; classMap[k].aSum+=r.authorizedAbsent||0;
-    classMap[k].uSum+=r.unauthorizedAbsent||0; classMap[k].pctSum+=r.attendancePct||0;
+    const k=r.className || (r.grade+(r.section||''));
+    if(!classMap[k]) classMap[k]={grade:r.grade,section:r.section||'',cycle:r.cycle,gender:recordGender(r)||'mixed',days:0,tSum:0,pSum:0,aSum:0,uSum:0,pctSum:0};
+    classMap[k].days++; classMap[k].tSum+=r.totalStudents||0; classMap[k].pSum+=r.present||0;
+    classMap[k].aSum+=r.authorizedAbsent||0; classMap[k].uSum+=r.unauthorizedAbsent||0;
+    classMap[k].pctSum+=r.attendancePct||0;
   });
 
-  const classRows = Object.entries(classMap)
-    .sort(([,a],[,b])=>a.grade.localeCompare(b.grade)||a.section.localeCompare(b.section))
-    .map(([cls,v])=>{
-      const rowStyle = v.gender==='male' ? 'background:#eff6ff' : 'background:#fdf2f8';
-      const pct = Math.round(v.pctSum/v.days);
-      const cl  = pct<70?'danger':pct<85?'gold':'green';
-      return `<tr style="${rowStyle}">
-        <td><strong>${cls}</strong></td><td>${v.grade}</td><td>${v.section}</td>
-        <td>${genderBadge(v.section, v.grade)}</td><td>${v.cycle}</td>
-        <td>${v.days}</td><td>${v.pSum}</td><td>${v.aSum}</td><td>${v.uSum}</td>
-        <td>${badge(pct+'%',cl)}</td>
-      </tr>`;
-    }).join('');
+  const gradeOrder=['KG 1','KG 2','1','2','3','4','5','6','7','8','9','10','11','12'];
+  const sortedClasses = Object.entries(classMap).sort(([,a],[,b])=>{
+    const gi = g => gradeOrder.indexOf(g)<0?99:gradeOrder.indexOf(g);
+    return gi(a.grade)-gi(b.grade) || a.section.localeCompare(b.section);
+  });
 
-  // Summary rows for Male and Female totals
-  const mTotalDays = Object.values(classMap).filter(v=>v.gender==='male').reduce((s,v)=>s+v.days,0);
-  const fTotalDays = Object.values(classMap).filter(v=>v.gender==='female').reduce((s,v)=>s+v.days,0);
-  const mPctAvg = mTotalDays ? Math.round(Object.values(classMap).filter(v=>v.gender==='male').reduce((s,v)=>s+v.pctSum,0)/mTotalDays) : 0;
-  const fPctAvg = fTotalDays ? Math.round(Object.values(classMap).filter(v=>v.gender==='female').reduce((s,v)=>s+v.pctSum,0)/fTotalDays) : 0;
-  const mCl = mPctAvg<70?'danger':mPctAvg<85?'gold':'green';
-  const fCl = fPctAvg<70?'danger':fPctAvg<85?'gold':'green';
+  const rowStyle = g => g==='male'?'background:#eff6ff':g==='female'?'background:#fdf2f8':'background:#f0fdf4';
+  const classRows = sortedClasses.map(([cls,v])=>{
+    const pct = v.days ? Math.round(v.pctSum/v.days) : 0;
+    const cl  = pct<70?'danger':pct<85?'gold':'green';
+    const avgT = v.days ? Math.round(v.tSum/v.days) : 0;
+    return `<tr style="${rowStyle(v.gender)}">
+      <td><strong>${cls}</strong></td><td>${v.grade}</td><td>${v.section}</td>
+      <td>${genderBadge(v.section,v.grade)}</td><td>${v.cycle}</td>
+      <td>${v.days}</td><td>${fmt(avgT)}</td><td>${fmt(v.pSum)}</td><td>${fmt(v.aSum)}</td><td>${fmt(v.uSum)}</td>
+      <td>${badge(pct+'%',cl)}</td>
+    </tr>`;
+  }).join('');
 
-  const summaryRows = (mRecs.length || fRecs.length) ? `
-    <tr style="background:#1e3a8a;color:white;font-weight:700;border-top:3px solid #2563eb">
-      <td colspan="2"><strong>♂ Male Total</strong></td>
-      <td>—</td>
-      <td><span class="gender-badge-m" style="background:rgba(255,255,255,0.2);color:white">♂ Male</span></td>
-      <td>—</td>
-      <td>${mTotalDays}</td><td>${fmt(mP)}</td><td>${fmt(mA)}</td><td>${fmt(mU)}</td>
-      <td><span class="badge" style="background:rgba(255,255,255,0.2);color:white">${mAvg}%</span></td>
-    </tr>
-    <tr style="background:#831843;color:white;font-weight:700;border-top:3px solid #db2777">
-      <td colspan="2"><strong>♀ Female Total</strong></td>
-      <td>—</td>
-      <td><span class="gender-badge-f" style="background:rgba(255,255,255,0.2);color:white">♀ Female</span></td>
-      <td>—</td>
-      <td>${fTotalDays}</td><td>${fmt(fP)}</td><td>${fmt(fA)}</td><td>${fmt(fU)}</td>
-      <td><span class="badge" style="background:rgba(255,255,255,0.2);color:white">${fAvg}%</span></td>
+  // ── Summary total rows by gender ──
+  const summaryRow = (label, arr, bgStyle, badgeHtml) => {
+    const t=calcT(arr),p=calcP(arr),a=calcA(arr),u=calcU(arr);
+    const avg=calcAvg(arr);
+    const days=arr.length;
+    return arr.length ? `<tr style="${bgStyle};font-weight:700;border-top:3px solid currentColor">
+      <td colspan="2"><strong>${label}</strong></td><td>—</td>
+      <td>${badgeHtml}</td><td>—</td>
+      <td>${days}</td><td>${fmt(Math.round(t/Math.max(days,1)))}</td>
+      <td>${fmt(p)}</td><td>${fmt(a)}</td><td>${fmt(u)}</td>
+      <td><strong>${avg}%</strong></td>
+    </tr>` : '';
+  };
+
+  const mSummary = summaryRow('♂ Male Total', mRecs, 'background:#1e3a8a;color:white', '<span class="gender-badge-m" style="background:rgba(255,255,255,0.2);color:white">♂ Male</span>');
+  const fSummary = summaryRow('♀ Female Total', fRecs, 'background:#831843;color:white', '<span class="gender-badge-f" style="background:rgba(255,255,255,0.2);color:white">♀ Female</span>');
+  const xSummary = summaryRow('👥 Mixed Total', xRecs, 'background:#064e3b;color:white', '<span class="gender-badge-x" style="background:rgba(255,255,255,0.2);color:white">👥 Mixed</span>');
+  const allSummary = recs.length ? `<tr style="background:#0f172a;color:white;font-weight:700;border-top:4px solid #059669">
+      <td colspan="2"><strong>🏫 Grand Total</strong></td><td>—</td><td>—</td><td>—</td>
+      <td>${recs.length}</td><td>${fmt(Math.round(allT/Math.max(recs.length,1)))}</td>
+      <td>${fmt(allP)}</td><td>${fmt(allA)}</td><td>${fmt(allU)}</td>
+      <td><strong>${allAvg}%</strong></td>
     </tr>` : '';
 
   document.getElementById('tbody-gender').innerHTML = classRows
-    ? classRows + summaryRows
-    : '<tr><td colspan="10" style="text-align:center;padding:30px;color:#94a3b8">No gender-split data found (Grade 5, Middle &amp; Higher only)</td></tr>';
+    ? classRows + mSummary + fSummary + xSummary + allSummary
+    : '<tr><td colspan="11" style="text-align:center;padding:30px;color:#94a3b8">No data found for selected filters</td></tr>';
+
+  // ── Cycle-wise summary ──
+  const cycles = [...new Set(recs.map(r=>r.cycle))].sort();
+  let cycleHtml = '<div class="section-heading" style="margin-top:24px;">🔵 Cycle-wise Attendance Summary (Total Students + Breakdown)</div><div class="card"><div class="table-wrap"><table><thead><tr><th>Cycle</th><th>Gender</th><th>Classes</th><th>Avg Total Students</th><th>Total Present</th><th>Auth Absent</th><th>Unauth Absent</th><th>Avg Attendance %</th></tr></thead><tbody>';
+  cycles.forEach(c => {
+    const cr = recs.filter(r=>r.cycle===c);
+    const cmR = cr.filter(r=>recordGender(r)==='male');
+    const cfR = cr.filter(r=>recordGender(r)==='female');
+    const cxR = cr.filter(r=>!recordGender(r));
+    const rowsForCycle = [
+      {arr:cr,  label:`<strong>${c}</strong> (All)`, bg:'background:#f8fafc'},
+      ...(cmR.length?[{arr:cmR, label:'&nbsp;&nbsp;♂ Male',  bg:'background:#eff6ff;color:#1e3a8a'}]:[]),
+      ...(cfR.length?[{arr:cfR, label:'&nbsp;&nbsp;♀ Female',bg:'background:#fdf2f8;color:#831843'}]:[]),
+      ...(cxR.length?[{arr:cxR, label:'&nbsp;&nbsp;👥 Mixed', bg:'background:#f0fdf4;color:#065f46'}]:[]),
+    ];
+    rowsForCycle.forEach(({arr,label,bg}) => {
+      const t=calcT(arr),p=calcP(arr),a=calcA(arr),u=calcU(arr),avg=calcAvg(arr);
+      const cl=avg<70?'danger':avg<85?'gold':'green';
+      cycleHtml += `<tr style="${bg}"><td>${label}</td>
+        <td>${arr===cr?'<span style="color:#94a3b8;font-size:.75rem">All</span>':arr===cmR?'<span class="gender-badge-m">♂ Male</span>':arr===cfR?'<span class="gender-badge-f">♀ Female</span>':'<span class="gender-badge-x">👥 Mixed</span>'}</td>
+        <td>${arr.length}</td><td>${fmt(Math.round(t/Math.max(arr.length,1)))}</td>
+        <td>${fmt(p)}</td><td>${fmt(a)}</td><td>${fmt(u)}</td><td>${badge(avg+'%',cl)}</td></tr>`;
+    });
+  });
+  cycleHtml += '</tbody></table></div></div>';
+
+  // ── Grade-wise summary ──
+  let gradeHtml = '<div class="section-heading" style="margin-top:24px;">📚 Grade-wise Attendance Summary (Total Students + Breakdown)</div><div class="card"><div class="table-wrap"><table><thead><tr><th>Grade</th><th>Cycle</th><th>Gender</th><th>Classes</th><th>Avg Total Students</th><th>Total Present</th><th>Auth Absent</th><th>Unauth Absent</th><th>Avg Attendance %</th></tr></thead><tbody>';
+  grades.forEach(g => {
+    const gr = recs.filter(r=>r.grade===g);
+    const gmR = gr.filter(r=>recordGender(r)==='male');
+    const gfR = gr.filter(r=>recordGender(r)==='female');
+    const gxR = gr.filter(r=>!recordGender(r));
+    const cyc = gr[0]?.cycle||'—';
+    const rowsForGrade = [
+      {arr:gr,  label:`<strong>Grade ${g}</strong>`, bg:'background:#f8fafc'},
+      ...(gmR.length?[{arr:gmR, label:'&nbsp;&nbsp;♂ Male',  bg:'background:#eff6ff;color:#1e3a8a'}]:[]),
+      ...(gfR.length?[{arr:gfR, label:'&nbsp;&nbsp;♀ Female',bg:'background:#fdf2f8;color:#831843'}]:[]),
+      ...(gxR.length?[{arr:gxR, label:'&nbsp;&nbsp;👥 Mixed', bg:'background:#f0fdf4;color:#065f46'}]:[]),
+    ];
+    rowsForGrade.forEach(({arr,label,bg},idx) => {
+      const t=calcT(arr),p=calcP(arr),a=calcA(arr),u=calcU(arr),avg=calcAvg(arr);
+      const cl=avg<70?'danger':avg<85?'gold':'green';
+      gradeHtml += `<tr style="${bg}"><td>${label}</td><td>${idx===0?cyc:'—'}</td>
+        <td>${arr===gr?'<span style="color:#94a3b8;font-size:.75rem">All</span>':arr===gmR?'<span class="gender-badge-m">♂ Male</span>':arr===gfR?'<span class="gender-badge-f">♀ Female</span>':'<span class="gender-badge-x">👥 Mixed</span>'}</td>
+        <td>${arr.length}</td><td>${fmt(Math.round(t/Math.max(arr.length,1)))}</td>
+        <td>${fmt(p)}</td><td>${fmt(a)}</td><td>${fmt(u)}</td><td>${badge(avg+'%',cl)}</td></tr>`;
+    });
+  });
+  gradeHtml += '</tbody></table></div></div>';
+
+  // Inject cycle + grade summary after the main table
+  const container = document.getElementById('gender-summary-extras');
+  if (container) container.innerHTML = cycleHtml + gradeHtml;
 };
 
 // ── DELETE ────────────────────────────────────────────────────────
@@ -1501,37 +1636,39 @@ window.downloadTodayPDF = function() {
     }
   });
 
-  // Gender breakdown section (Grade 5, Middle & Higher)
+  // Gender breakdown section (All cycles — Male, Female, Mixed)
   const mR = recs.filter(r=>recordGender(r)==='male');
   const fR = recs.filter(r=>recordGender(r)==='female');
-  if (mR.length || fR.length) {
+  const xR = recs.filter(r=>!recordGender(r));
+  {
     const afterMain = pdoc.lastAutoTable.finalY + 10;
     pdoc.setFontSize(10); pdoc.setFont('helvetica','bold'); pdoc.setTextColor(6,78,59);
-    pdoc.text('▌ Gender-wise Attendance (Grade 5, Middle & Higher)', 15, afterMain);
+    pdoc.text('▌ Gender-wise Attendance Summary (All Cycles)', 15, afterMain);
     const gRows = [];
-    if (mR.length) {
-      const mP=mR.reduce((s,r)=>s+(r.present||0),0), mA=mR.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
-      const mU=mR.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
-      const mAvg=Math.round(mR.reduce((s,r)=>s+(r.attendancePct||0),0)/mR.length);
-      gRows.push(['♂ Male',mR.length,mP,mA,mU,mAvg+'%']);
-    }
-    if (fR.length) {
-      const fP=fR.reduce((s,r)=>s+(r.present||0),0), fA=fR.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
-      const fU=fR.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
-      const fAvg=Math.round(fR.reduce((s,r)=>s+(r.attendancePct||0),0)/fR.length);
-      gRows.push(['♀ Female',fR.length,fP,fA,fU,fAvg+'%']);
-    }
+    const gRow = (arr,label) => {
+      if (!arr.length) return;
+      const t=arr.reduce((s,r)=>s+(r.totalStudents||0),0);
+      const p=arr.reduce((s,r)=>s+(r.present||0),0), a=arr.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
+      const u=arr.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
+      const avg=Math.round(arr.reduce((s,r)=>s+(r.attendancePct||0),0)/arr.length);
+      gRows.push([label,arr.length,t,p,a,u,avg+'%']);
+    };
+    gRow(mR,'♂ Male'); gRow(fR,'♀ Female'); gRow(xR,'Mixed (KG/G1-4)');
+    gRow(recs,'Grand Total');
     pdoc.autoTable({
       startY: afterMain+5,
-      head:[['Gender','Classes','Total Present','Auth Absent','Unauth Absent','Avg Attendance %']],
+      head:[['Gender','Classes','Total Students','Present','Auth Absent','Unauth Absent','Avg Att %']],
       body: gRows,
-      styles:{fontSize:9,cellPadding:3},
+      styles:{fontSize:8.5,cellPadding:3},
       headStyles:{fillColor:[37,99,235],textColor:[255,255,255],fontStyle:'bold'},
-      columnStyles:{5:{halign:'center'}},
+      columnStyles:{6:{halign:'center'}},
       didParseCell:(data)=>{
         if(data.section==='body'){
-          if(data.row.index===0) data.cell.styles.textColor=[30,58,138];
-          else data.cell.styles.textColor=[131,24,67];
+          const row=data.row.index;
+          if(row===0) data.cell.styles.textColor=[30,58,138];
+          else if(row===1) data.cell.styles.textColor=[131,24,67];
+          else if(row===2) data.cell.styles.textColor=[6,78,59];
+          else { data.cell.styles.textColor=[15,23,42]; data.cell.styles.fontStyle='bold'; }
         }
       }
     });
