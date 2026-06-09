@@ -674,12 +674,12 @@ tbody td { padding: 10px 13px; }
   <div class="tab-panel" id="tab-absent">
     <div class="filter-row">
       <div class="form-group">
-        <label>From Date</label>
-        <input type="date" id="f-absent-from"/>
+        <label>Date</label>
+        <input type="date" id="f-absent-date"/>
       </div>
       <div class="form-group">
-        <label>To Date</label>
-        <input type="date" id="f-absent-to"/>
+        <label>Grade</label>
+        <select id="f-absent-grade"><option value="">All Grades</option></select>
       </div>
       <div class="form-group">
         <label>Type</label>
@@ -689,28 +689,20 @@ tbody td { padding: 10px 13px; }
           <option value="unauthorized">Unauthorized</option>
         </select>
       </div>
-      <div class="form-group">
-        <label>Grade</label>
-        <select id="f-absent-grade"><option value="">All Grades</option></select>
-      </div>
-      <div class="form-group" id="absent-gender-wrap">
-        <label>Gender</label>
-        <select id="f-absent-gender">
-          <option value="">All Genders</option>
-          <option value="male">♂ Male (AB/BB/CB/DB)</option>
-          <option value="female">♀ Female (AG/BG/CG/DG)</option>
-          <option value="mixed">👥 Mixed (KG, Grade 1–4)</option>
-        </select>
-      </div>
       <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="renderAbsent()">🔍 Filter</button>
     </div>
     <div class="stats-row" id="absent-stats"></div>
+    <!-- Download buttons — shown only after filter -->
+    <div id="absent-download-bar" style="display:none;margin-bottom:18px;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-gold btn-sm" onclick="downloadAbsentPDF()">⬇️ Download PDF</button>
+      <button class="btn btn-outline btn-sm" onclick="downloadAbsentExcel()">📊 Download Excel</button>
+    </div>
     <div class="card">
       <div class="card-title">🚨 Absent Student Register</div>
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Date</th><th>Class</th><th>Grade</th><th>Cycle</th>
+            <th>#</th><th>Date</th><th>Day</th><th>Class</th><th>Grade</th><th>Cycle</th>
             <th>Student Name</th><th>Type</th><th>Class Teacher</th>
           </tr></thead>
           <tbody id="tbody-absent"></tbody>
@@ -976,8 +968,7 @@ window.loadAll = async function() {
   document.getElementById('f-month').value = _today.slice(0,7);
   const _ago = new Date(); _ago.setDate(_ago.getDate()-7);
   const _agoStr = _ago.toISOString().split('T')[0];
-  document.getElementById('f-absent-from').value = _agoStr;
-  document.getElementById('f-absent-to').value   = _today;
+  document.getElementById('f-absent-date').value = _today;
   document.getElementById('f-rec-from').value    = _agoStr;
   document.getElementById('f-rec-to').value      = _today;
   document.getElementById('f-gender-from').value = _agoStr;
@@ -1264,41 +1255,150 @@ window.searchStudent = function() {
 };
 
 // ── ABSENT REGISTER ───────────────────────────────────────────────
+let ABSENT_ROWS_CACHE = []; // used by download functions
+let ABSENT_DATE_CACHE = '';
+
 window.renderAbsent = function() {
-  const from   = document.getElementById('f-absent-from').value;
-  const to     = document.getElementById('f-absent-to').value;
-  const type   = document.getElementById('f-absent-type').value;
-  const grade  = document.getElementById('f-absent-grade').value;
-  const gender = document.getElementById('f-absent-gender').value;
+  const date  = document.getElementById('f-absent-date').value;
+  const type  = document.getElementById('f-absent-type').value;
+  const grade = document.getElementById('f-absent-grade').value;
+
   let recs = filterByCycle(ALL_RECORDS);
-  if (from)   recs=recs.filter(r=>r.date>=from);
-  if (to)     recs=recs.filter(r=>r.date<=to);
-  if (grade)  recs=recs.filter(r=>r.grade===grade);
-  if (gender) recs=recs.filter(r=>{
-    const g=recordGender(r) || 'mixed';
-    return g===gender;
-  });
+  if (date)  recs = recs.filter(r => r.date === date);
+  if (grade) recs = recs.filter(r => r.grade === grade);
 
-  const rows=[];
-  recs.forEach(r=>{
-    if ((!type||type==='authorized')   && r.authNames)   r.authNames.split(',').map(s=>s.trim()).filter(Boolean).forEach(name=>rows.push({date:r.date,class:r.className,grade:r.grade,cycle:r.cycle,name,type:'Authorized',teacher:r.teacherName}));
-    if ((!type||type==='unauthorized') && r.unauthNames) r.unauthNames.split(',').map(s=>s.trim()).filter(Boolean).forEach(name=>rows.push({date:r.date,class:r.className,grade:r.grade,cycle:r.cycle,name,type:'Unauthorized',teacher:r.teacherName}));
+  const rows = [];
+  recs.forEach(r => {
+    if ((!type || type==='authorized')   && r.authNames)
+      r.authNames.split(',').map(s=>s.trim()).filter(Boolean)
+        .forEach(name => rows.push({date:r.date, day:r.day||'', class:r.className, grade:r.grade, cycle:r.cycle, name, type:'Authorized',   teacher:r.teacherName}));
+    if ((!type || type==='unauthorized') && r.unauthNames)
+      r.unauthNames.split(',').map(s=>s.trim()).filter(Boolean)
+        .forEach(name => rows.push({date:r.date, day:r.day||'', class:r.className, grade:r.grade, cycle:r.cycle, name, type:'Unauthorized', teacher:r.teacherName}));
   });
-  rows.sort((a,b)=>b.date.localeCompare(a.date));
+  rows.sort((a,b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name));
 
-  const auth=rows.filter(r=>r.type==='Authorized').length, unauth=rows.filter(r=>r.type==='Unauthorized').length;
-  const totStu=recs.reduce((s,r)=>s+(r.totalStudents||0),0);
-  const totPres=recs.reduce((s,r)=>s+(r.present||0),0);
-  document.getElementById('absent-stats').innerHTML=`
+  // Cache for downloads
+  ABSENT_ROWS_CACHE = rows;
+  ABSENT_DATE_CACHE = date;
+
+  const auth   = rows.filter(r=>r.type==='Authorized').length;
+  const unauth = rows.filter(r=>r.type==='Unauthorized').length;
+  const totStu  = recs.reduce((s,r)=>s+(r.totalStudents||0),0);
+  const totPres = recs.reduce((s,r)=>s+(r.present||0),0);
+
+  document.getElementById('absent-stats').innerHTML = `
     <div class="stat-box info" style="border-color:#a5b4fc;background:#eef2ff"><div class="num" style="color:#4338ca;font-size:1.6rem">${fmt(totStu)}</div><div class="lbl">Total Students</div></div>
     <div class="stat-box green"><div class="num">${fmt(totPres)}</div><div class="lbl">Total Present</div></div>
     <div class="stat-box gold"><div class="num">${auth}</div><div class="lbl">Authorized Absences</div></div>
     <div class="stat-box danger"><div class="num">${unauth}</div><div class="lbl">Unauthorized Absences</div></div>
     <div class="stat-box info"><div class="num">${rows.length}</div><div class="lbl">Total Entries</div></div>
   `;
-  document.getElementById('tbody-absent').innerHTML=rows.length
-    ?rows.map(r=>`<tr class="${r.type==='Unauthorized'?'absent-row':''}"><td>${r.date}</td><td><strong>${r.class}</strong></td><td>${r.grade}</td><td>${r.cycle}</td><td><strong>${r.name}</strong></td><td>${badge(r.type,r.type==='Authorized'?'gold':'danger')}</td><td>${r.teacher}</td></tr>`).join('')
-    :'<tr><td colspan="7" style="text-align:center;padding:30px;color:#94a3b8">No absent records found</td></tr>';
+
+  document.getElementById('tbody-absent').innerHTML = rows.length
+    ? rows.map((r,i) => `<tr class="${r.type==='Unauthorized'?'absent-row':''}">
+        <td style="color:#94a3b8;font-size:.8rem">${i+1}</td>
+        <td>${r.date}</td><td>${r.day}</td><td><strong>${r.class}</strong></td>
+        <td>${r.grade}</td><td>${r.cycle}</td><td><strong>${r.name}</strong></td>
+        <td>${badge(r.type, r.type==='Authorized'?'gold':'danger')}</td>
+        <td>${r.teacher}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="9" style="text-align:center;padding:30px;color:#94a3b8">No absent records found for this filter</td></tr>';
+
+  // Show/hide download bar
+  const bar = document.getElementById('absent-download-bar');
+  bar.style.display = rows.length ? 'flex' : 'none';
+};
+
+// ── ABSENT REGISTER — PDF DOWNLOAD ───────────────────────────────
+window.downloadAbsentPDF = function() {
+  if (!ABSENT_ROWS_CACHE.length) { toast('No records to download', 'error'); return; }
+  const { jsPDF } = window.jspdf;
+  const pdoc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const W = pdoc.internal.pageSize.getWidth();
+  const typeEl  = document.getElementById('f-absent-type');
+  const gradeEl = document.getElementById('f-absent-grade');
+  const typeLabel  = typeEl.options[typeEl.selectedIndex].text;
+  const gradeLabel = gradeEl.options[gradeEl.selectedIndex].text;
+  const dateLabel  = ABSENT_DATE_CACHE || 'All Dates';
+  const genDate = new Date().toLocaleString();
+
+  // Header band
+  pdoc.setFillColor(220,38,38); pdoc.rect(0,0,W,30,'F');
+  pdoc.setTextColor(255,255,255);
+  pdoc.setFontSize(14); pdoc.setFont('helvetica','bold');
+  pdoc.text('Pakistan Islamia Higher Secondary School, Sharjah', W/2, 11, {align:'center'});
+  pdoc.setFontSize(10); pdoc.setFont('helvetica','normal');
+  pdoc.text('Absent Student Register', W/2, 19, {align:'center'});
+  pdoc.setFontSize(8);
+  pdoc.text(`Date: ${dateLabel}  |  Grade: ${gradeLabel}  |  Type: ${typeLabel}  |  Generated: ${genDate}`, W/2, 26, {align:'center'});
+
+  // Summary row
+  const auth   = ABSENT_ROWS_CACHE.filter(r=>r.type==='Authorized').length;
+  const unauth = ABSENT_ROWS_CACHE.filter(r=>r.type==='Unauthorized').length;
+  pdoc.setFontSize(9); pdoc.setTextColor(30,30,30); pdoc.setFont('helvetica','bold');
+  pdoc.text(`Total Absent: ${ABSENT_ROWS_CACHE.length}   |   Authorized: ${auth}   |   Unauthorized: ${unauth}`, 15, 38);
+
+  pdoc.autoTable({
+    startY: 43,
+    head:[['#','Date','Day','Class','Grade','Cycle','Student Name','Type','Class Teacher']],
+    body: ABSENT_ROWS_CACHE.map((r,i)=>[i+1, r.date, r.day, r.class, r.grade, r.cycle, r.name, r.type, r.teacher]),
+    styles: { fontSize:8.5, cellPadding:3 },
+    headStyles: { fillColor:[220,38,38], textColor:[255,255,255], fontStyle:'bold' },
+    alternateRowStyles: { fillColor:[254,242,242] },
+    columnStyles: { 0:{halign:'center',cellWidth:8}, 7:{fontStyle:'bold'} },
+    didParseCell: (data) => {
+      if (data.section==='body' && data.column.index===7) {
+        data.cell.styles.textColor = data.cell.text[0]==='Unauthorized' ? [220,38,38] : [161,98,7];
+      }
+    }
+  });
+
+  const pages = pdoc.internal.getNumberOfPages();
+  for (let i=1;i<=pages;i++) {
+    pdoc.setPage(i);
+    pdoc.setFontSize(7); pdoc.setFont('helvetica','normal'); pdoc.setTextColor(150,150,150);
+    pdoc.text(`PIHSS Sharjah — Absent Register  |  Page ${i} of ${pages}  |  ${genDate}`, W/2, 205, {align:'center'});
+  }
+
+  const fname = `PIHSS_Absent_Register_${ABSENT_DATE_CACHE||'all'}.pdf`;
+  pdoc.save(fname);
+  toast(`✅ PDF downloaded (${ABSENT_ROWS_CACHE.length} students)`, 'success');
+};
+
+// ── ABSENT REGISTER — EXCEL DOWNLOAD ─────────────────────────────
+window.downloadAbsentExcel = function() {
+  if (!ABSENT_ROWS_CACHE.length) { toast('No records to download', 'error'); return; }
+  const typeEl  = document.getElementById('f-absent-type');
+  const gradeEl = document.getElementById('f-absent-grade');
+  const typeLabel  = typeEl.options[typeEl.selectedIndex].text;
+  const gradeLabel = gradeEl.options[gradeEl.selectedIndex].text;
+
+  // Build CSV content (universally compatible)
+  const headers = ['#','Date','Day','Class','Grade','Cycle','Student Name','Type','Class Teacher'];
+  const rows    = ABSENT_ROWS_CACHE.map((r,i) =>
+    [i+1, r.date, r.day, r.class, r.grade, r.cycle, r.name, r.type, r.teacher]
+      .map(v => `"${String(v).replace(/"/g,'""')}"`)
+      .join(',')
+  );
+  const metaLines = [
+    `"Pakistan Islamia Higher Secondary School Sharjah"`,
+    `"Absent Student Register"`,
+    `"Date: ${ABSENT_DATE_CACHE||'All'}","Grade: ${gradeLabel}","Type: ${typeLabel}"`,
+    `"Generated: ${new Date().toLocaleString()}"`,
+    ''
+  ];
+  const csv = '\uFEFF' + [...metaLines, headers.map(h=>`"${h}"`).join(','), ...rows].join('\r\n');
+
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `PIHSS_Absent_Register_${ABSENT_DATE_CACHE||'all'}.csv`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast(`✅ Excel/CSV downloaded (${ABSENT_ROWS_CACHE.length} students)`, 'success');
 };
 
 // ── ALL RECORDS ───────────────────────────────────────────────────
@@ -1897,8 +1997,7 @@ document.getElementById('f-month').value       = todayStr.slice(0,7);
 
 const ago = new Date(); ago.setDate(ago.getDate()-7);
 const agoStr = ago.toISOString().split('T')[0];
-document.getElementById('f-absent-from').value = agoStr;
-document.getElementById('f-absent-to').value   = todayStr;
+document.getElementById('f-absent-date').value   = todayStr;
 document.getElementById('f-rec-from').value    = agoStr;
 document.getElementById('f-rec-to').value      = todayStr;
 document.getElementById('f-gender-from').value = agoStr;
