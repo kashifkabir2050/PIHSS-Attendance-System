@@ -611,6 +611,7 @@ tbody td { padding: 10px 13px; }
         <input type="month" id="f-month"/>
       </div>
       <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="renderMonthly()">🔍 Filter</button>
+      <button class="btn btn-gold btn-sm" id="monthly-download-btn" style="align-self:flex-end;display:none" onclick="downloadMonthlyPDF()">📥 Download Month PDF (with Graphs)</button>
     </div>
     <div class="stats-row" id="monthly-stats"></div>
     <div class="dash-grid">
@@ -1158,6 +1159,8 @@ window.renderMonthly = function() {
   const mEl = document.getElementById('f-month');
   if (!mEl.value) mEl.value = new Date().toISOString().slice(0,7);
   const month = mEl.value;
+  const dlBtn = document.getElementById('monthly-download-btn');
+  if (dlBtn) dlBtn.style.display = 'inline-flex';
   let recs = filterByCycleAndGender(ALL_RECORDS).filter(r=>r.date&&r.date.startsWith(month));
 
   const totT2=recs.reduce((s,r)=>s+(r.totalStudents||0),0);
@@ -1652,6 +1655,163 @@ window.renderGenderReport = function() {
 };
 
 // ── DELETE ────────────────────────────────────────────────────────
+// ── MONTHLY REPORT PDF (with all graphs) ──────────────────────────
+window.downloadMonthlyPDF = function() {
+  const month = document.getElementById('f-month').value;
+  if (!month) { toast('⚠️ Please select a month first', 'error'); return; }
+
+  // Make sure tables/charts on screen match the selected month
+  renderMonthly();
+
+  const recs = filterByCycleAndGender(ALL_RECORDS).filter(r => r.date && r.date.startsWith(month));
+  if (!recs.length) { toast('No data for this month to download', 'error'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const pdoc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+  const W = 297;
+  const monthLabel = new Date(month + '-01T00:00:00').toLocaleDateString('en-GB', { month:'long', year:'numeric' });
+  const genDate = new Date().toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  const cycleLabel = ACTIVE_CYCLE || 'All Cycles';
+
+  const avg = arr => arr.length ? Math.round(arr.reduce((s,r)=>s+(r.attendancePct||0),0)/arr.length) : 0;
+  const sum = (arr,k) => arr.reduce((s,r)=>s+(r[k]||0),0);
+  const pctColor = v => v<70 ? [220,38,38] : v<85 ? [217,119,6] : [5,150,105];
+
+  // Draw a chart canvas as an image at x,y with width w (keeps aspect ratio). Returns height used.
+  const addChart = (id, title, x, y, w) => {
+    const ch = CHARTS[id];
+    if (!ch) return 0;
+    const img = ch.toBase64Image('image/png', 1);
+    const h = w * (ch.canvas.height / ch.canvas.width);
+    pdoc.setFontSize(9); pdoc.setFont('helvetica','bold'); pdoc.setTextColor(6,78,59);
+    pdoc.text(title, x, y);
+    pdoc.setDrawColor(200,220,200); pdoc.rect(x-2, y+2, w+4, h+4);
+    pdoc.addImage(img, 'PNG', x, y+4, w, h);
+    return h + 10;
+  };
+
+  // ─ Page 1: summary + trend chart ─
+  let y = pdfHeader(pdoc, `Monthly Attendance Report — ${monthLabel}`, `${cycleLabel}  |  Generated: ${genDate}`, true);
+  y = pdfSummaryBar(pdoc, [
+    {val:sum(recs,'totalStudents'), lbl:'Total Students',   bg:[224,242,254], fg:[30,58,138]},
+    {val:sum(recs,'present'),       lbl:'Total Present',    bg:[209,250,229], fg:[6,95,70]},
+    {val:sum(recs,'authorizedAbsent'),   lbl:'Auth Absent',   bg:[254,243,199], fg:[146,64,14]},
+    {val:sum(recs,'unauthorizedAbsent'), lbl:'Unauth Absent', bg:[254,226,226], fg:[153,27,27]},
+    {val:avg(recs)+'%',             lbl:'Avg Attendance',   bg:[237,233,254], fg:[91,33,182]},
+    {val:[...new Set(recs.map(r=>r.date))].length, lbl:'Days Recorded', bg:[240,253,244], fg:[6,78,59]},
+  ], y, true);
+  const trendW = 200;
+  addChart('chart-monthly-trend', 'Monthly Trend (Day-wise)', (W-trendW)/2, y+2, trendW);
+
+  // ─ Page 2: cycle + grade charts ─
+  pdoc.addPage();
+  y = pdfHeader(pdoc, `Monthly Charts — ${monthLabel}`, `${cycleLabel}  |  Generated: ${genDate}`, true);
+  addChart('chart-monthly-cycle', 'Cycle-wise Monthly Average %', 15, y+2, 125);
+  addChart('chart-monthly-grade', 'Grade-wise Monthly Average %', 155, y+2, 125);
+
+  // ─ Page 3: class report ─
+  pdoc.addPage();
+  y = pdfHeader(pdoc, `Monthly Class Report — ${monthLabel}`, `${cycleLabel}  |  Generated: ${genDate}`, true);
+  const classMap = {};
+  recs.forEach(r => {
+    const k = r.className;
+    if (!classMap[k]) classMap[k] = {grade:r.grade, section:r.section||'', cycle:r.cycle, days:0, pSum:0, aSum:0, uSum:0, pctSum:0};
+    classMap[k].days++; classMap[k].pSum += r.present||0; classMap[k].aSum += r.authorizedAbsent||0;
+    classMap[k].uSum += r.unauthorizedAbsent||0; classMap[k].pctSum += r.attendancePct||0;
+  });
+  const gOrder = ['KG 1','KG 2','1','2','3','4','5','6','7','8','9','10','11','12'];
+  const gi = g => gOrder.indexOf(g) < 0 ? 99 : gOrder.indexOf(g);
+  const classRows = Object.entries(classMap)
+    .sort(([,a],[,b]) => gi(a.grade)-gi(b.grade) || a.section.localeCompare(b.section))
+    .map(([cls,v]) => {
+      const g = sectionGender(v.section, v.grade);
+      return [cls, v.grade, v.section, g==='male'?'Male':g==='female'?'Female':'Mixed', v.cycle,
+              v.days, Math.round(v.pSum/v.days), v.aSum, v.uSum, Math.round(v.pctSum/v.days)+'%'];
+    });
+  pdoc.autoTable({
+    startY: y,
+    head:[['Class','Grade','Section','Gender','Cycle','Days','Avg Present','Total Auth Absent','Total Unauth Absent','Avg Attendance %']],
+    body: classRows,
+    styles:{fontSize:8,cellPadding:2.5},
+    headStyles:{fillColor:[6,78,59],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[240,253,244]},
+    columnStyles:{9:{halign:'center'}},
+    didParseCell:(data)=>{ if(data.section==='body'&&data.column.index===9){ data.cell.styles.textColor = pctColor(parseInt(data.cell.text[0])); data.cell.styles.fontStyle='bold'; } }
+  });
+
+  // Gender summary
+  const mR = recs.filter(r=>recordGender(r)==='male');
+  const fR = recs.filter(r=>recordGender(r)==='female');
+  const xR = recs.filter(r=>!recordGender(r));
+  const gRows = [];
+  [['Male',mR],['Female',fR],['Mixed',xR],['Grand Total',recs]].forEach(([label,arr]) => {
+    if (arr.length) gRows.push([label, arr.length, sum(arr,'totalStudents'), sum(arr,'present'), sum(arr,'authorizedAbsent'), sum(arr,'unauthorizedAbsent'), avg(arr)+'%']);
+  });
+  const gy = pdoc.lastAutoTable.finalY + 10;
+  pdoc.setFontSize(10); pdoc.setFont('helvetica','bold'); pdoc.setTextColor(6,78,59);
+  pdoc.text('Gender-wise Monthly Summary', 15, gy);
+  pdoc.autoTable({
+    startY: gy + 4,
+    head:[['Gender','Submissions','Total Students','Present','Auth Absent','Unauth Absent','Avg Att %']],
+    body: gRows,
+    styles:{fontSize:8.5,cellPadding:3},
+    headStyles:{fillColor:[37,99,235],textColor:[255,255,255],fontStyle:'bold'}
+  });
+
+  // ─ Day-wise summary ─
+  pdoc.addPage();
+  y = pdfHeader(pdoc, `Day-wise Summary — ${monthLabel}`, `${cycleLabel}  |  Generated: ${genDate}`, true);
+  const dayMap = {};
+  recs.forEach(r => {
+    if (!dayMap[r.date]) dayMap[r.date] = {day:r.day||'', arr:[]};
+    dayMap[r.date].arr.push(r);
+  });
+  pdoc.autoTable({
+    startY: y,
+    head:[['Date','Day','Classes','Total Students','Present','Auth Absent','Unauth Absent','Avg Attendance %']],
+    body: Object.keys(dayMap).sort().map(d => { const a = dayMap[d].arr;
+      return [d, dayMap[d].day, a.length, sum(a,'totalStudents'), sum(a,'present'), sum(a,'authorizedAbsent'), sum(a,'unauthorizedAbsent'), avg(a)+'%']; }),
+    styles:{fontSize:8.5,cellPadding:2.5},
+    headStyles:{fillColor:[37,99,235],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[239,246,255]},
+    columnStyles:{7:{halign:'center'}},
+    didParseCell:(data)=>{ if(data.section==='body'&&data.column.index===7){ data.cell.styles.textColor = pctColor(parseInt(data.cell.text[0])); data.cell.styles.fontStyle='bold'; } }
+  });
+
+  // ─ Absent register for the month ─
+  pdoc.addPage();
+  pdoc.setFillColor(220,38,38); pdoc.rect(0,0,W,28,'F');
+  pdoc.setTextColor(255,255,255); pdoc.setFontSize(15); pdoc.setFont('helvetica','bold');
+  pdoc.text('Pakistan Islamia Higher Secondary School, Sharjah', W/2, 11, {align:'center'});
+  pdoc.setFontSize(9); pdoc.setFont('helvetica','normal');
+  pdoc.text(`Absent Student Register — ${monthLabel}`, W/2, 20, {align:'center'});
+  const absentRows = [];
+  [...recs].sort((a,b)=>a.date.localeCompare(b.date)).forEach(r => {
+    (r.authNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>absentRows.push([r.date,r.day||'',r.className,r.grade,n,'Authorized',r.teacherName]));
+    (r.unauthNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>absentRows.push([r.date,r.day||'',r.className,r.grade,n,'Unauthorized',r.teacherName]));
+  });
+  pdoc.autoTable({
+    startY: 32,
+    head:[['Date','Day','Class','Grade','Student Name','Type','Class Teacher']],
+    body: absentRows.length ? absentRows : [['—','—','—','—','No absent students recorded','—','—']],
+    styles:{fontSize:8,cellPadding:2.5},
+    headStyles:{fillColor:[220,38,38],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[254,242,242]},
+    didParseCell:(data)=>{ if(data.section==='body'&&data.column.index===5&&data.cell.text[0]==='Unauthorized'){ data.cell.styles.textColor=[220,38,38]; data.cell.styles.fontStyle='bold'; } }
+  });
+
+  // Footer
+  const pages = pdoc.internal.getNumberOfPages();
+  for (let i=1;i<=pages;i++) {
+    pdoc.setPage(i);
+    pdoc.setFontSize(7.5); pdoc.setFont('helvetica','normal'); pdoc.setTextColor(150,150,150);
+    pdoc.text(`PIHSS Sharjah — Monthly Report ${monthLabel}  |  Page ${i} of ${pages}`, W/2, 205, {align:'center'});
+  }
+
+  pdoc.save(`PIHSS_Monthly_Report_${month}.pdf`);
+  toast(`✅ Monthly PDF downloaded (${monthLabel}, ${pages} pages)`, 'success');
+};
+
 window.deleteRecord = async function(id) {
   if (!confirm('Delete this record? This cannot be undone.')) return;
   spin(true);
