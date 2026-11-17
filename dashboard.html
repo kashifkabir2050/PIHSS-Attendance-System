@@ -1713,6 +1713,19 @@ window.downloadDailyPDF = function() {
     {val:avg(recs)+'%',             lbl:'Avg Attendance', bg:[237,233,254], fg:[91,33,182]},
     {val:recs.length,               lbl:'Classes Submitted', bg:[240,253,244], fg:[6,78,59]},
   ], y, true);
+  // Gender row: Male / Female / Mixed students + average attendance
+  const gm = recs.filter(r=>recordGender(r)==='male');
+  const gf = recs.filter(r=>recordGender(r)==='female');
+  const gx = recs.filter(r=>!recordGender(r));
+  const gPct = arr => arr.length ? avg(arr)+'%' : 'N/A';
+  y = pdfSummaryBar(pdoc, [
+    {val:sum(gm,'totalStudents'), lbl:'Male Students',    bg:[239,246,255], fg:[37,99,235]},
+    {val:gPct(gm),                lbl:'Male Avg %',       bg:[239,246,255], fg:[37,99,235]},
+    {val:sum(gf,'totalStudents'), lbl:'Female Students',  bg:[253,242,248], fg:[219,39,119]},
+    {val:gPct(gf),                lbl:'Female Avg %',     bg:[253,242,248], fg:[219,39,119]},
+    {val:sum(gx,'totalStudents'), lbl:'Mixed Students',   bg:[240,253,244], fg:[5,150,105]},
+    {val:gPct(gx),                lbl:'Mixed Avg %',      bg:[240,253,244], fg:[5,150,105]},
+  ], y, true);
   const trendW = 200;
   addChart('chart-daily-trend', '14-Day Attendance Trend', (W-trendW)/2, y+2, trendW);
 
