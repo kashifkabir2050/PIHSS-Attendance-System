@@ -391,6 +391,9 @@ tbody td { padding: 10px 13px; }
   .cycle-tab { min-width: 90px; padding: 10px 14px; }
   .hero-title { font-size: 1.25rem; }
 }
+.simple-toggle{align-self:flex-end;display:inline-flex;gap:8px;align-items:center;font-size:.8rem;font-weight:600;color:var(--ink-soft);padding:9px 14px;border:2px solid #e2e8f0;border-radius:10px;background:#fff;cursor:pointer}
+.simple-toggle input{accent-color:var(--emerald);width:16px;height:16px}
+.simple-pct .col-aa{display:none}
 </style>
 </head>
 <body>
@@ -531,6 +534,8 @@ tbody td { padding: 10px 13px; }
         <select id="f-grade-daily"><option value="">All Grades</option></select>
       </div>
       <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="renderDaily()">🔍 Filter</button>
+      <label class="simple-toggle"><input type="checkbox" class="simple-pct-chk" onchange="setSimplePct(this.checked)"> Attendance % only (Present ÷ Total)</label>
+      <button class="btn btn-gold btn-sm" style="align-self:flex-end" onclick="downloadDailyFullPDF()">📥 Download All (Data + Graphs)</button>
       <button class="btn btn-gold btn-sm" style="align-self:flex-end" onclick="downloadDailyPDF()">📥 Download Paradigm Daily Report</button>
     </div>
 
@@ -557,7 +562,7 @@ tbody td { padding: 10px 13px; }
         <table id="tbl-daily">
           <thead><tr>
             <th>Class</th><th>Grade</th><th>Section</th><th>Gender</th><th>Cycle</th>
-            <th>Total</th><th>Present</th><th>Auth Absent</th><th>Unauth Absent</th>
+            <th>Total</th><th>Present</th><th class="col-aa">Auth Absent</th><th class="col-aa">Unauth Absent</th>
             <th>Attendance %</th><th>Class Teacher</th>
           </tr></thead>
           <tbody id="tbody-daily"></tbody>
@@ -612,6 +617,7 @@ tbody td { padding: 10px 13px; }
         <input type="month" id="f-month"/>
       </div>
       <button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="renderMonthly()">🔍 Filter</button>
+      <label class="simple-toggle"><input type="checkbox" class="simple-pct-chk" onchange="setSimplePct(this.checked)"> Attendance % only (Present ÷ Total)</label>
       <button class="btn btn-gold btn-sm" id="monthly-download-btn" style="align-self:flex-end;display:none" onclick="downloadMonthlyPDF()">📥 Download Month PDF (with Graphs)</button>
     </div>
     <div class="stats-row" id="monthly-stats"></div>
@@ -632,11 +638,11 @@ tbody td { padding: 10px 13px; }
     <div class="section-heading">📋 Monthly Class Report</div>
     <div class="card">
       <div class="table-wrap">
-        <table>
+        <table id="tbl-monthly">
           <thead><tr>
             <th>Class</th><th>Grade</th><th>Section</th><th>Gender</th><th>Cycle</th>
-            <th>Days</th><th>Avg Present</th><th>Total Auth Absent</th>
-            <th>Total Unauth Absent</th><th>Avg Attendance %</th>
+            <th>Days</th><th>Avg Present</th><th class="col-aa">Total Auth Absent</th>
+            <th class="col-aa">Total Unauth Absent</th><th>Avg Attendance %</th>
           </tr></thead>
           <tbody id="tbody-monthly"></tbody>
         </table>
@@ -827,6 +833,18 @@ const db  = getFirestore(app);
 let ALL_RECORDS = [];
 const CHARTS = {};
 let ACTIVE_CYCLE = '';
+let SIMPLE_PCT = false;   // true = show only Present ÷ Total % (no authorized / unauthorized)
+const sumK = (a,k) => a.reduce((x,r)=>x+(Number(r[k])||0),0);
+function pctOfRecs(arr) {
+  if (!arr.length) return 0;
+  if (SIMPLE_PCT) { const t = sumK(arr,'totalStudents'); return t ? Math.round(sumK(arr,'present')/t*100) : 0; }
+  return Math.round(arr.reduce((x,r)=>x+(r.attendancePct||0),0)/arr.length);
+}
+window.setSimplePct = function(on) {
+  SIMPLE_PCT = !!on;
+  document.querySelectorAll('.simple-pct-chk').forEach(c => c.checked = SIMPLE_PCT);
+  if (document.getElementById('tab-monthly').classList.contains('active')) renderMonthly(); else renderDaily();
+};
 
 // ── Gender helpers ────────────────────────────────────────────────
 // KG 1, KG 2, Grade 1–4  → always Mixed (sections A–F, no gender split)
@@ -1010,15 +1028,15 @@ window.renderDaily = function() {
   const totPresent = recs.reduce((s,r)=>s+(r.present||0),0);
   const totAuth    = recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
   const totUnauth  = recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
-  const avgPct     = recs.length ? Math.round(recs.reduce((s,r)=>s+(r.attendancePct||0),0)/recs.length) : 0;
+  const avgPct     = recs.length ? pctOfRecs(recs) : 0;
 
   // Gender breakdown
   const mRecs = recs.filter(r=>recordGender(r)==='male');
   const fRecs = recs.filter(r=>recordGender(r)==='female');
   const xRecs = recs.filter(r=>!recordGender(r));
-  const mPct  = mRecs.length ? Math.round(mRecs.reduce((s,r)=>s+(r.attendancePct||0),0)/mRecs.length) : null;
-  const fPct  = fRecs.length ? Math.round(fRecs.reduce((s,r)=>s+(r.attendancePct||0),0)/fRecs.length) : null;
-  const xPct  = xRecs.length ? Math.round(xRecs.reduce((s,r)=>s+(r.attendancePct||0),0)/xRecs.length) : null;
+  const mPct  = mRecs.length ? pctOfRecs(mRecs) : null;
+  const fPct  = fRecs.length ? pctOfRecs(fRecs) : null;
+  const xPct  = xRecs.length ? pctOfRecs(xRecs) : null;
   const mT = mRecs.reduce((s,r)=>s+(r.totalStudents||0),0);
   const fT = fRecs.reduce((s,r)=>s+(r.totalStudents||0),0);
   const xT = xRecs.reduce((s,r)=>s+(r.totalStudents||0),0);
@@ -1026,9 +1044,11 @@ window.renderDaily = function() {
   document.getElementById('daily-stats').innerHTML = `
     <div class="stat-box info" style="border-color:#a5b4fc;background:#eef2ff"><div class="num" style="color:#4338ca;font-size:1.6rem">${fmt(totStudents)}</div><div class="lbl">Total Students</div></div>
     <div class="stat-box green"><div class="num">${fmt(totPresent)}</div><div class="lbl">Present</div></div>
+    ${SIMPLE_PCT?'':`
     <div class="stat-box gold"><div class="num">${fmt(totAuth)}</div><div class="lbl">Auth Absent</div></div>
     <div class="stat-box danger"><div class="num">${fmt(totUnauth)}</div><div class="lbl">Unauth Absent</div></div>
-    <div class="stat-box info"><div class="num">${avgPct}%</div><div class="lbl">Avg Attendance</div></div>
+    `}
+    <div class="stat-box info"><div class="num">${avgPct}%</div><div class="lbl">${SIMPLE_PCT?'Attendance %':'Avg Attendance'}</div></div>
     <div class="stat-box info"><div class="num">${recs.length}</div><div class="lbl">Classes Submitted</div></div>
     ${mPct!==null?`<div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff"><div class="num" style="color:#2563eb">${fmt(mT)}</div><div class="lbl">♂ Male Students</div></div>`:''}
     ${mPct!==null?`<div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff"><div class="num" style="color:#2563eb">${mPct}%</div><div class="lbl">♂ Male Avg %</div></div>`:''}
@@ -1038,15 +1058,16 @@ window.renderDaily = function() {
     ${xPct!==null&&xRecs.length?`<div class="stat-box green" style="border-color:#6ee7b7"><div class="num" style="color:#059669">${xPct}%</div><div class="lbl">👥 Mixed Avg %</div></div>`:''}
   `;
 
+  document.getElementById('tbl-daily').classList.toggle('simple-pct',SIMPLE_PCT);
   const tbody = document.getElementById('tbody-daily');
   tbody.innerHTML = recs.length
     ? recs.map(r => {
-        const pc = r.attendancePct||0;
+        const pc = SIMPLE_PCT ? pctOfRecs([r]) : (r.attendancePct||0);
         const cl = pc<70?'danger':pc<85?'gold':'green';
         return `<tr>
           <td><strong>${r.className}</strong></td><td>${r.grade}</td><td>${r.section}</td>
           <td>${genderBadge(r.section, r.grade)}</td><td>${r.cycle}</td>
-          <td>${r.totalStudents}</td><td>${r.present}</td><td>${r.authorizedAbsent}</td><td>${r.unauthorizedAbsent}</td>
+          <td>${r.totalStudents}</td><td>${r.present}</td><td class="col-aa">${r.authorizedAbsent}</td><td class="col-aa">${r.unauthorizedAbsent}</td>
           <td>${badge(pc+'%',cl)}</td><td>${r.teacherName}</td>
         </tr>`;
       }).join('')
@@ -1059,23 +1080,24 @@ window.renderDaily = function() {
     return d.toISOString().split('T')[0];
   });
   const baseRecs = filterByCycleAndGender(ALL_RECORDS);
+  const TREND_D = SIMPLE_PCT ? [{label:'Attendance %',data:days.map(x=>pctOfRecs(baseRecs.filter(r=>r.date===x))),borderColor:PALETTE.green[0],backgroundColor:PALETTE.green[1],fill:true,tension:.4,pointRadius:4}] : null;
   makeChart('chart-daily-trend',{
     type:'line',
     data:{
       labels: days.map(d=>d.slice(5)),
-      datasets:[
+      datasets: TREND_D || [
         {label:'Present',      data:days.map(d=>baseRecs.filter(r=>r.date===d).reduce((s,r)=>s+(r.present||0),0)),        borderColor:PALETTE.green[0],backgroundColor:PALETTE.green[1],fill:true,tension:.4,pointRadius:4},
         {label:'Auth Absent',  data:days.map(d=>baseRecs.filter(r=>r.date===d).reduce((s,r)=>s+(r.authorizedAbsent||0),0)),borderColor:PALETTE.gold[0], backgroundColor:PALETTE.gold[1], fill:true,tension:.4,pointRadius:4},
         {label:'Unauth Absent',data:days.map(d=>baseRecs.filter(r=>r.date===d).reduce((s,r)=>s+(r.unauthorizedAbsent||0),0)),borderColor:PALETTE.red[0],backgroundColor:PALETTE.red[1],fill:true,tension:.4,pointRadius:4},
       ]
     },
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{grid:{display:false}},y:{beginAtZero:true}}}
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,...(SIMPLE_PCT?{max:100}:{})}}}
   });
 
   const cycles = ['Kindergarten','Primary','Middle','Higher'];
   makeChart('chart-cycle',{
     type:'bar',
-    data:{labels:cycles, datasets:[{label:'Avg Attendance %',data:cycles.map(c=>{const cr=recs.filter(r=>r.cycle===c);return cr.length?Math.round(cr.reduce((s,r)=>s+(r.attendancePct||0),0)/cr.length):0;}),backgroundColor:MULTI.slice(0,4),borderRadius:8,borderSkipped:false}]},
+    data:{labels:cycles, datasets:[{label:'Avg Attendance %',data:cycles.map(c=>{const cr=recs.filter(r=>r.cycle===c);return cr.length?pctOfRecs(cr):0;}),backgroundColor:MULTI.slice(0,4),borderRadius:8,borderSkipped:false}]},
     options:{responsive:true,maintainAspectRatio:false,scales:{y:{max:100,min:0,grid:{color:'#f1f5f9'}},x:{grid:{display:false}}},plugins:{legend:{display:false}}}
   });
 
@@ -1084,7 +1106,7 @@ window.renderDaily = function() {
   const gLabels = Object.keys(gradeMap).sort();
   makeChart('chart-grade',{
     type:'bar',
-    data:{labels:gLabels,datasets:[{label:'Avg %',data:gLabels.map(g=>Math.round(gradeMap[g].sum/gradeMap[g].cnt)),backgroundColor:MULTI,borderRadius:8,borderSkipped:false}]},
+    data:{labels:gLabels,datasets:[{label:'Avg %',data:gLabels.map(g=>pctOfRecs(recs.filter(r=>r.grade===g))),backgroundColor:MULTI,borderRadius:8,borderSkipped:false}]},
     options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',scales:{x:{max:100,min:0,grid:{color:'#f1f5f9'}},y:{grid:{display:false}}},plugins:{legend:{display:false}}}
   });
 };
@@ -1167,54 +1189,58 @@ window.renderMonthly = function() {
   const totT2=recs.reduce((s,r)=>s+(r.totalStudents||0),0);
   const totP=recs.reduce((s,r)=>s+(r.present||0),0),totA=recs.reduce((s,r)=>s+(r.authorizedAbsent||0),0);
   const totU=recs.reduce((s,r)=>s+(r.unauthorizedAbsent||0),0);
-  const avgPct=recs.length?Math.round(recs.reduce((s,r)=>s+(r.attendancePct||0),0)/recs.length):0;
+  const avgPct=recs.length?pctOfRecs(recs):0;
   const mmR=recs.filter(r=>recordGender(r)==='male'), mfR=recs.filter(r=>recordGender(r)==='female'), mxR=recs.filter(r=>!recordGender(r));
-  const mmPct=mmR.length?Math.round(mmR.reduce((s,r)=>s+(r.attendancePct||0),0)/mmR.length):null;
-  const mfPct=mfR.length?Math.round(mfR.reduce((s,r)=>s+(r.attendancePct||0),0)/mfR.length):null;
-  const mxPct=mxR.length?Math.round(mxR.reduce((s,r)=>s+(r.attendancePct||0),0)/mxR.length):null;
+  const mmPct=mmR.length?pctOfRecs(mmR):null;
+  const mfPct=mfR.length?pctOfRecs(mfR):null;
+  const mxPct=mxR.length?pctOfRecs(mxR):null;
   document.getElementById('monthly-stats').innerHTML=`
     <div class="stat-box info" style="border-color:#a5b4fc;background:#eef2ff"><div class="num" style="color:#4338ca;font-size:1.6rem">${fmt(totT2)}</div><div class="lbl">Total Students</div></div>
     <div class="stat-box green"><div class="num">${fmt(totP)}</div><div class="lbl">Total Present</div></div>
+    ${SIMPLE_PCT?'':`
     <div class="stat-box gold"><div class="num">${fmt(totA)}</div><div class="lbl">Auth Absent</div></div>
     <div class="stat-box danger"><div class="num">${fmt(totU)}</div><div class="lbl">Unauth Absent</div></div>
-    <div class="stat-box info"><div class="num">${avgPct}%</div><div class="lbl">Avg Attendance</div></div>
+    `}
+    <div class="stat-box info"><div class="num">${avgPct}%</div><div class="lbl">${SIMPLE_PCT?'Attendance %':'Avg Attendance'}</div></div>
     ${mmPct!==null?`<div class="stat-box info" style="border-color:#93c5fd;background:#eff6ff"><div class="num" style="color:#2563eb">${mmPct}%</div><div class="lbl">♂ Male Avg %</div></div>`:''}
     ${mfPct!==null?`<div class="stat-box info" style="border-color:#f9a8d4;background:#fdf2f8"><div class="num" style="color:#db2777">${mfPct}%</div><div class="lbl">♀ Female Avg %</div></div>`:''}
     ${mxPct!==null&&mxR.length?`<div class="stat-box green" style="border-color:#6ee7b7"><div class="num" style="color:#059669">${mxPct}%</div><div class="lbl">👥 Mixed Avg %</div></div>`:''}
   `;
 
   const days=[...new Set(recs.map(r=>r.date))].sort();
+  const TREND_M = SIMPLE_PCT ? [{label:'Attendance %',data:days.map(x=>pctOfRecs(recs.filter(r=>r.date===x))),borderColor:PALETTE.green[0],backgroundColor:PALETTE.green[1],fill:true,tension:.35,pointRadius:3}] : null;
   makeChart('chart-monthly-trend',{
     type:'line',
-    data:{labels:days.map(d=>d.slice(8)),datasets:[
+    data:{labels:days.map(d=>d.slice(8)),datasets: TREND_M || [
       {label:'Present',      data:days.map(d=>recs.filter(r=>r.date===d).reduce((s,r)=>s+(r.present||0),0)),          borderColor:PALETTE.green[0],backgroundColor:PALETTE.green[1],fill:true,tension:.35,pointRadius:3},
       {label:'Auth Absent',  data:days.map(d=>recs.filter(r=>r.date===d).reduce((s,r)=>s+(r.authorizedAbsent||0),0)),  borderColor:PALETTE.gold[0], backgroundColor:PALETTE.gold[1], fill:true,tension:.35,pointRadius:3},
       {label:'Unauth Absent',data:days.map(d=>recs.filter(r=>r.date===d).reduce((s,r)=>s+(r.unauthorizedAbsent||0),0)),borderColor:PALETTE.red[0],  backgroundColor:PALETTE.red[1],  fill:true,tension:.35,pointRadius:3},
     ]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{grid:{display:false}},y:{beginAtZero:true}}}
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,...(SIMPLE_PCT?{max:100}:{})}}}
   });
 
   const cycles=['Kindergarten','Primary','Middle','Higher'];
   makeChart('chart-monthly-cycle',{
     type:'polarArea',
-    data:{labels:cycles,datasets:[{data:cycles.map(c=>{const cr=recs.filter(r=>r.cycle===c);return cr.length?Math.round(cr.reduce((s,r)=>s+(r.attendancePct||0),0)/cr.length):0;}),backgroundColor:MULTI.slice(0,4)}]},
+    data:{labels:cycles,datasets:[{data:cycles.map(c=>{const cr=recs.filter(r=>r.cycle===c);return cr.length?pctOfRecs(cr):0;}),backgroundColor:MULTI.slice(0,4)}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}
   });
 
   const grades=[...new Set(recs.map(r=>r.grade))].sort();
   makeChart('chart-monthly-grade',{
     type:'bar',
-    data:{labels:grades,datasets:[{label:'Avg %',data:grades.map(g=>{const gr=recs.filter(r=>r.grade===g);return gr.length?Math.round(gr.reduce((s,r)=>s+(r.attendancePct||0),0)/gr.length):0;}),backgroundColor:MULTI,borderRadius:8,borderSkipped:false}]},
+    data:{labels:grades,datasets:[{label:'Avg %',data:grades.map(g=>{const gr=recs.filter(r=>r.grade===g);return gr.length?pctOfRecs(gr):0;}),backgroundColor:MULTI,borderRadius:8,borderSkipped:false}]},
     options:{responsive:true,maintainAspectRatio:false,scales:{y:{max:100,min:0,grid:{color:'#f1f5f9'}},x:{grid:{display:false}}},plugins:{legend:{display:false}}}
   });
 
+  document.getElementById('tbl-monthly').classList.toggle('simple-pct',SIMPLE_PCT);
   const classMap={};
-  recs.forEach(r=>{const k=r.className;if(!classMap[k])classMap[k]={grade:r.grade,section:r.section,cycle:r.cycle,days:0,pSum:0,aSum:0,uSum:0,pctSum:0};classMap[k].days++;classMap[k].pSum+=r.present||0;classMap[k].aSum+=r.authorizedAbsent||0;classMap[k].uSum+=r.unauthorizedAbsent||0;classMap[k].pctSum+=r.attendancePct||0;});
+  recs.forEach(r=>{const k=r.className;if(!classMap[k])classMap[k]={grade:r.grade,section:r.section,cycle:r.cycle,days:0,pSum:0,aSum:0,uSum:0,pctSum:0,tSum:0};classMap[k].days++;classMap[k].tSum+=r.totalStudents||0;classMap[k].pSum+=r.present||0;classMap[k].aSum+=r.authorizedAbsent||0;classMap[k].uSum+=r.unauthorizedAbsent||0;classMap[k].pctSum+=r.attendancePct||0;});
   document.getElementById('tbody-monthly').innerHTML=Object.entries(classMap).map(([cls,v])=>`
     <tr><td><strong>${cls}</strong></td><td>${v.grade}</td><td>${v.section}</td>
     <td>${genderBadge(v.section, v.grade)}</td><td>${v.cycle}</td>
-    <td>${v.days}</td><td>${Math.round(v.pSum/v.days)}</td><td>${v.aSum}</td><td>${v.uSum}</td>
-    <td>${badge(Math.round(v.pctSum/v.days)+'%','green')}</td></tr>`).join('')
+    <td>${v.days}</td><td>${Math.round(v.pSum/v.days)}</td><td class="col-aa">${v.aSum}</td><td class="col-aa">${v.uSum}</td>
+    <td>${badge((SIMPLE_PCT?(v.tSum?Math.round(v.pSum/v.tSum*100):0):Math.round(v.pctSum/v.days))+'%','green')}</td></tr>`).join('')
     ||'<tr><td colspan="10" style="text-align:center;padding:30px;color:#94a3b8">No data this month</td></tr>';
 };
 
@@ -1732,6 +1758,157 @@ window.downloadDailyPDF = function() {
   toast(`✅ Paradigm Daily Report downloaded (${date}, ${gradeLabel})`, 'success');
 };
 
+// ── FULL DAILY REPORT PDF (all data + graphs shown on the Daily tab) ──
+window.downloadDailyFullPDF = function() {
+  const date = document.getElementById('f-date').value || new Date().toISOString().split('T')[0];
+  const gradeEl = document.getElementById('f-grade-daily');
+  const grade = gradeEl.value;
+  const gradeLabel = grade ? `Grade ${grade}` : 'All Grades';
+
+  // Sync screen with current filters, then finish chart animations before capture
+  renderDaily();
+  ['chart-daily-trend','chart-cycle','chart-grade'].forEach(id => {
+    const c = CHARTS[id];
+    if (c) { c.stop(); c.options.animation = false; c.update('none'); }
+  });
+
+  let recs = filterByCycleAndGender(ALL_RECORDS).filter(r => r.date === date);
+  if (grade) recs = recs.filter(r => r.grade === grade);
+  if (!recs.length) { toast('No data for this date/grade to download', 'error'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const pdoc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+  const W = 297;
+  const dayName = new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday:'long' });
+  const cycleLabel = ACTIVE_CYCLE || 'All Cycles';
+  const genDate = new Date().toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  const sub = `${cycleLabel}  |  ${gradeLabel}  |  Generated: ${genDate}`;
+
+  const avg = arr => pctOfRecs(arr);
+  const dropIdx = (row, idx) => SIMPLE_PCT ? row.filter((_,n)=>!idx.includes(n)) : row;
+  const sum = (arr,k) => arr.reduce((s,r)=>s+(r[k]||0),0);
+  const pctColor = v => v<70 ? [220,38,38] : v<85 ? [217,119,6] : [5,150,105];
+
+  const addChart = (id, title, x, y, w) => {
+    const ch = CHARTS[id];
+    if (!ch) return 0;
+    const src = ch.canvas;
+    const tmp = document.createElement('canvas');
+    tmp.width = src.width; tmp.height = src.height;
+    const tctx = tmp.getContext('2d');
+    tctx.fillStyle = '#ffffff'; tctx.fillRect(0, 0, tmp.width, tmp.height);
+    tctx.drawImage(src, 0, 0);
+    const h = w * (src.height / src.width);
+    pdoc.setFontSize(9); pdoc.setFont('helvetica','bold'); pdoc.setTextColor(6,78,59);
+    pdoc.text(title, x, y);
+    pdoc.setDrawColor(200,220,200); pdoc.rect(x-2, y+2, w+4, h+4);
+    pdoc.addImage(tmp.toDataURL('image/png'), 'PNG', x, y+4, w, h);
+    return h + 10;
+  };
+
+  // Page 1: summary + 14-day trend
+  let y = pdfHeader(pdoc, `Daily Attendance Report — ${dayName}, ${date}`, sub, true);
+  y = pdfSummaryBar(pdoc, [
+    {val:sum(recs,'totalStudents'), lbl:'Total Students', bg:[224,242,254], fg:[30,58,138]},
+    {val:sum(recs,'present'),       lbl:'Present',        bg:[209,250,229], fg:[6,95,70]},
+    ...(SIMPLE_PCT ? [] : [
+    {val:sum(recs,'authorizedAbsent'),   lbl:'Auth Absent',   bg:[254,243,199], fg:[146,64,14]},
+    {val:sum(recs,'unauthorizedAbsent'), lbl:'Unauth Absent', bg:[254,226,226], fg:[153,27,27]}]),
+    {val:avg(recs)+'%',             lbl: SIMPLE_PCT ? 'Attendance %' : 'Avg Attendance', bg:[237,233,254], fg:[91,33,182]},
+    {val:recs.length,               lbl:'Classes Submitted', bg:[240,253,244], fg:[6,78,59]},
+  ], y, true);
+  // Gender row: Male / Female / Mixed students + average attendance
+  const gm = recs.filter(r=>recordGender(r)==='male');
+  const gf = recs.filter(r=>recordGender(r)==='female');
+  const gx = recs.filter(r=>!recordGender(r));
+  const gPct = arr => arr.length ? avg(arr)+'%' : 'N/A';
+  y = pdfSummaryBar(pdoc, [
+    {val:sum(gm,'totalStudents'), lbl:'Male Students',    bg:[239,246,255], fg:[37,99,235]},
+    {val:gPct(gm),                lbl:'Male Avg %',       bg:[239,246,255], fg:[37,99,235]},
+    {val:sum(gf,'totalStudents'), lbl:'Female Students',  bg:[253,242,248], fg:[219,39,119]},
+    {val:gPct(gf),                lbl:'Female Avg %',     bg:[253,242,248], fg:[219,39,119]},
+    {val:sum(gx,'totalStudents'), lbl:'Mixed Students',   bg:[240,253,244], fg:[5,150,105]},
+    {val:gPct(gx),                lbl:'Mixed Avg %',      bg:[240,253,244], fg:[5,150,105]},
+  ], y, true);
+  const trendW = 200;
+  addChart('chart-daily-trend', '14-Day Attendance Trend', (W-trendW)/2, y+2, trendW);
+
+  // Page 2: cycle + grade charts
+  pdoc.addPage();
+  y = pdfHeader(pdoc, `Daily Charts — ${date}`, sub, true);
+  addChart('chart-cycle', 'Cycle-wise Attendance %', 15, y+2, 125);
+  addChart('chart-grade', 'Grade-wise Attendance %', 155, y+2, 125);
+
+  // Page 3: class table + gender summary
+  pdoc.addPage();
+  y = pdfHeader(pdoc, `Class & Section Report — ${date}`, sub, true);
+  pdoc.autoTable({
+    startY: y,
+    head:[dropIdx(['Class','Grade','Section','Gender','Cycle','Total','Present','Auth Absent','Unauth Absent','Attendance %','Class Teacher'],[7,8])],
+    body: recs.map(r => {
+      const g = recordGender(r);
+      return [r.className, r.grade, r.section||'', g==='male'?'Male':g==='female'?'Female':'Mixed', r.cycle,
+              r.totalStudents, r.present, r.authorizedAbsent, r.unauthorizedAbsent, (SIMPLE_PCT ? pctOfRecs([r]) : (r.attendancePct||0))+'%', r.teacherName];
+    }).map(r=>dropIdx(r,[7,8])),
+    styles:{fontSize:8,cellPadding:2.5},
+    headStyles:{fillColor:[6,78,59],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[240,253,244]},
+    columnStyles:{[SIMPLE_PCT?7:9]:{halign:'center'}},
+    didParseCell:(data)=>{ if(data.section==='body'&&data.column.index===(SIMPLE_PCT?7:9)){ data.cell.styles.textColor = pctColor(parseInt(data.cell.text[0])); data.cell.styles.fontStyle='bold'; } }
+  });
+
+  const mR = recs.filter(r=>recordGender(r)==='male');
+  const fR = recs.filter(r=>recordGender(r)==='female');
+  const xR = recs.filter(r=>!recordGender(r));
+  const gRows = [];
+  [['Male',mR],['Female',fR],['Mixed',xR],['Grand Total',recs]].forEach(([label,arr]) => {
+    if (arr.length) gRows.push(dropIdx([label, arr.length, sum(arr,'totalStudents'), sum(arr,'present'), sum(arr,'authorizedAbsent'), sum(arr,'unauthorizedAbsent'), avg(arr)+'%'],[4,5]));
+  });
+  const gy = pdoc.lastAutoTable.finalY + 10;
+  pdoc.setFontSize(10); pdoc.setFont('helvetica','bold'); pdoc.setTextColor(6,78,59);
+  pdoc.text('Gender-wise Summary', 15, gy);
+  pdoc.autoTable({
+    startY: gy + 4,
+    head:[dropIdx(['Gender','Classes','Total Students','Present','Auth Absent','Unauth Absent', SIMPLE_PCT?'Att %':'Avg Att %'],[4,5])],
+    body: gRows,
+    styles:{fontSize:8.5,cellPadding:3},
+    headStyles:{fillColor:[37,99,235],textColor:[255,255,255],fontStyle:'bold'}
+  });
+
+  // Absent register for the day (skipped in % only mode)
+  if (!SIMPLE_PCT) {
+  pdoc.addPage();
+  pdoc.setFillColor(220,38,38); pdoc.rect(0,0,W,28,'F');
+  pdoc.setTextColor(255,255,255); pdoc.setFontSize(15); pdoc.setFont('helvetica','bold');
+  pdoc.text('Pakistan Islamia Higher Secondary School, Sharjah', W/2, 11, {align:'center'});
+  pdoc.setFontSize(9); pdoc.setFont('helvetica','normal');
+  pdoc.text(`Absent Student Register — ${date}  |  ${gradeLabel}`, W/2, 20, {align:'center'});
+  const absentRows = [];
+  recs.forEach(r => {
+    (r.authNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>absentRows.push([r.date,r.className,r.grade,n,'Authorized',r.teacherName]));
+    (r.unauthNames||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(n=>absentRows.push([r.date,r.className,r.grade,n,'Unauthorized',r.teacherName]));
+  });
+  pdoc.autoTable({
+    startY: 32,
+    head:[['Date','Class','Grade','Student Name','Type','Class Teacher']],
+    body: absentRows.length ? absentRows : [['—','—','—','No absent students recorded','—','—']],
+    styles:{fontSize:9,cellPadding:3},
+    headStyles:{fillColor:[220,38,38],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[254,242,242]},
+    didParseCell:(data)=>{ if(data.section==='body'&&data.column.index===4&&data.cell.text[0]==='Unauthorized'){ data.cell.styles.textColor=[220,38,38]; data.cell.styles.fontStyle='bold'; } }
+  });
+
+  }
+  const pages = pdoc.internal.getNumberOfPages();
+  for (let i=1;i<=pages;i++) {
+    pdoc.setPage(i);
+    pdoc.setFontSize(7.5); pdoc.setFont('helvetica','normal'); pdoc.setTextColor(150,150,150);
+    pdoc.text(`PIHSS Sharjah — Daily Report ${date}  |  Page ${i} of ${pages}`, W/2, 205, {align:'center'});
+  }
+  pdoc.save(`PIHSS_Daily_Full_Report_${date}${grade ? '_Grade'+grade : ''}.pdf`);
+  toast(`✅ Full daily PDF downloaded (${date}, ${gradeLabel})`, 'success');
+};
+
 // ── MONTHLY REPORT PDF (with all graphs) ──────────────────────────
 window.downloadMonthlyPDF = function() {
   const month = document.getElementById('f-month').value;
@@ -1755,7 +1932,8 @@ window.downloadMonthlyPDF = function() {
   const genDate = new Date().toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
   const cycleLabel = ACTIVE_CYCLE || 'All Cycles';
 
-  const avg = arr => arr.length ? Math.round(arr.reduce((s,r)=>s+(r.attendancePct||0),0)/arr.length) : 0;
+  const avg = arr => pctOfRecs(arr);
+  const dropIdx = (row, idx) => SIMPLE_PCT ? row.filter((_,n)=>!idx.includes(n)) : row;
   const sum = (arr,k) => arr.reduce((s,r)=>s+(r[k]||0),0);
   const pctColor = v => v<70 ? [220,38,38] : v<85 ? [217,119,6] : [5,150,105];
 
@@ -1784,9 +1962,10 @@ window.downloadMonthlyPDF = function() {
   y = pdfSummaryBar(pdoc, [
     {val:sum(recs,'totalStudents'), lbl:'Total Students',   bg:[224,242,254], fg:[30,58,138]},
     {val:sum(recs,'present'),       lbl:'Total Present',    bg:[209,250,229], fg:[6,95,70]},
+    ...(SIMPLE_PCT ? [] : [
     {val:sum(recs,'authorizedAbsent'),   lbl:'Auth Absent',   bg:[254,243,199], fg:[146,64,14]},
-    {val:sum(recs,'unauthorizedAbsent'), lbl:'Unauth Absent', bg:[254,226,226], fg:[153,27,27]},
-    {val:avg(recs)+'%',             lbl:'Avg Attendance',   bg:[237,233,254], fg:[91,33,182]},
+    {val:sum(recs,'unauthorizedAbsent'), lbl:'Unauth Absent', bg:[254,226,226], fg:[153,27,27]}]),
+    {val:avg(recs)+'%',             lbl: SIMPLE_PCT ? 'Attendance %' : 'Avg Attendance',   bg:[237,233,254], fg:[91,33,182]},
     {val:[...new Set(recs.map(r=>r.date))].length, lbl:'Days Recorded', bg:[240,253,244], fg:[6,78,59]},
   ], y, true);
   const trendW = 200;
@@ -1804,8 +1983,8 @@ window.downloadMonthlyPDF = function() {
   const classMap = {};
   recs.forEach(r => {
     const k = r.className;
-    if (!classMap[k]) classMap[k] = {grade:r.grade, section:r.section||'', cycle:r.cycle, days:0, pSum:0, aSum:0, uSum:0, pctSum:0};
-    classMap[k].days++; classMap[k].pSum += r.present||0; classMap[k].aSum += r.authorizedAbsent||0;
+    if (!classMap[k]) classMap[k] = {grade:r.grade, section:r.section||'', cycle:r.cycle, days:0, pSum:0, aSum:0, uSum:0, pctSum:0, tSum:0};
+    classMap[k].days++; classMap[k].tSum += r.totalStudents||0; classMap[k].pSum += r.present||0; classMap[k].aSum += r.authorizedAbsent||0;
     classMap[k].uSum += r.unauthorizedAbsent||0; classMap[k].pctSum += r.attendancePct||0;
   });
   const gOrder = ['KG 1','KG 2','1','2','3','4','5','6','7','8','9','10','11','12'];
@@ -1815,17 +1994,17 @@ window.downloadMonthlyPDF = function() {
     .map(([cls,v]) => {
       const g = sectionGender(v.section, v.grade);
       return [cls, v.grade, v.section, g==='male'?'Male':g==='female'?'Female':'Mixed', v.cycle,
-              v.days, Math.round(v.pSum/v.days), v.aSum, v.uSum, Math.round(v.pctSum/v.days)+'%'];
+              v.days, Math.round(v.pSum/v.days), v.aSum, v.uSum, (SIMPLE_PCT ? (v.tSum?Math.round(v.pSum/v.tSum*100):0) : Math.round(v.pctSum/v.days))+'%'];
     });
   pdoc.autoTable({
     startY: y,
-    head:[['Class','Grade','Section','Gender','Cycle','Days','Avg Present','Total Auth Absent','Total Unauth Absent','Avg Attendance %']],
-    body: classRows,
+    head:[dropIdx(['Class','Grade','Section','Gender','Cycle','Days','Avg Present','Total Auth Absent','Total Unauth Absent', SIMPLE_PCT?'Attendance %':'Avg Attendance %'],[7,8])],
+    body: classRows.map(r=>dropIdx(r,[7,8])),
     styles:{fontSize:8,cellPadding:2.5},
     headStyles:{fillColor:[6,78,59],textColor:[255,255,255],fontStyle:'bold'},
     alternateRowStyles:{fillColor:[240,253,244]},
-    columnStyles:{9:{halign:'center'}},
-    didParseCell:(data)=>{ if(data.section==='body'&&data.column.index===9){ data.cell.styles.textColor = pctColor(parseInt(data.cell.text[0])); data.cell.styles.fontStyle='bold'; } }
+    columnStyles:{[SIMPLE_PCT?7:9]:{halign:'center'}},
+    didParseCell:(data)=>{ if(data.section==='body'&&data.column.index===(SIMPLE_PCT?7:9)){ data.cell.styles.textColor = pctColor(parseInt(data.cell.text[0])); data.cell.styles.fontStyle='bold'; } }
   });
 
   // Gender summary
@@ -1834,14 +2013,14 @@ window.downloadMonthlyPDF = function() {
   const xR = recs.filter(r=>!recordGender(r));
   const gRows = [];
   [['Male',mR],['Female',fR],['Mixed',xR],['Grand Total',recs]].forEach(([label,arr]) => {
-    if (arr.length) gRows.push([label, arr.length, sum(arr,'totalStudents'), sum(arr,'present'), sum(arr,'authorizedAbsent'), sum(arr,'unauthorizedAbsent'), avg(arr)+'%']);
+    if (arr.length) gRows.push(dropIdx([label, arr.length, sum(arr,'totalStudents'), sum(arr,'present'), sum(arr,'authorizedAbsent'), sum(arr,'unauthorizedAbsent'), avg(arr)+'%'],[4,5]));
   });
   const gy = pdoc.lastAutoTable.finalY + 10;
   pdoc.setFontSize(10); pdoc.setFont('helvetica','bold'); pdoc.setTextColor(6,78,59);
   pdoc.text('Gender-wise Monthly Summary', 15, gy);
   pdoc.autoTable({
     startY: gy + 4,
-    head:[['Gender','Submissions','Total Students','Present','Auth Absent','Unauth Absent','Avg Att %']],
+    head:[dropIdx(['Gender','Submissions','Total Students','Present','Auth Absent','Unauth Absent', SIMPLE_PCT?'Att %':'Avg Att %'],[4,5])],
     body: gRows,
     styles:{fontSize:8.5,cellPadding:3},
     headStyles:{fillColor:[37,99,235],textColor:[255,255,255],fontStyle:'bold'}
@@ -1857,17 +2036,18 @@ window.downloadMonthlyPDF = function() {
   });
   pdoc.autoTable({
     startY: y,
-    head:[['Date','Day','Classes','Total Students','Present','Auth Absent','Unauth Absent','Avg Attendance %']],
+    head:[dropIdx(['Date','Day','Classes','Total Students','Present','Auth Absent','Unauth Absent', SIMPLE_PCT?'Attendance %':'Avg Attendance %'],[5,6])],
     body: Object.keys(dayMap).sort().map(d => { const a = dayMap[d].arr;
-      return [d, dayMap[d].day, a.length, sum(a,'totalStudents'), sum(a,'present'), sum(a,'authorizedAbsent'), sum(a,'unauthorizedAbsent'), avg(a)+'%']; }),
+      return dropIdx([d, dayMap[d].day, a.length, sum(a,'totalStudents'), sum(a,'present'), sum(a,'authorizedAbsent'), sum(a,'unauthorizedAbsent'), avg(a)+'%'],[5,6]); }),
     styles:{fontSize:8.5,cellPadding:2.5},
     headStyles:{fillColor:[37,99,235],textColor:[255,255,255],fontStyle:'bold'},
     alternateRowStyles:{fillColor:[239,246,255]},
-    columnStyles:{7:{halign:'center'}},
-    didParseCell:(data)=>{ if(data.section==='body'&&data.column.index===7){ data.cell.styles.textColor = pctColor(parseInt(data.cell.text[0])); data.cell.styles.fontStyle='bold'; } }
+    columnStyles:{[SIMPLE_PCT?5:7]:{halign:'center'}},
+    didParseCell:(data)=>{ if(data.section==='body'&&data.column.index===(SIMPLE_PCT?5:7)){ data.cell.styles.textColor = pctColor(parseInt(data.cell.text[0])); data.cell.styles.fontStyle='bold'; } }
   });
 
-  // ─ Absent register for the month ─
+  // ─ Absent register for the month ─ (skipped in % only mode)
+  if (!SIMPLE_PCT) {
   pdoc.addPage();
   pdoc.setFillColor(220,38,38); pdoc.rect(0,0,W,28,'F');
   pdoc.setTextColor(255,255,255); pdoc.setFontSize(15); pdoc.setFont('helvetica','bold');
@@ -1889,6 +2069,7 @@ window.downloadMonthlyPDF = function() {
     didParseCell:(data)=>{ if(data.section==='body'&&data.column.index===5&&data.cell.text[0]==='Unauthorized'){ data.cell.styles.textColor=[220,38,38]; data.cell.styles.fontStyle='bold'; } }
   });
 
+  }
   // Footer
   const pages = pdoc.internal.getNumberOfPages();
   for (let i=1;i<=pages;i++) {
